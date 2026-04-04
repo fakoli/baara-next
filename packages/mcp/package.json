@@ -1,0 +1,21 @@
+{
+  "name": "@baara-next/mcp",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@baara-next/core": "workspace:*",
+    "@anthropic-ai/claude-agent-sdk": "^0.2",
+    "zod": "^3",
+    "hono": "^4"
+  },
+  "devDependencies": {
+    "typescript": "^5.8"
+  }
+}

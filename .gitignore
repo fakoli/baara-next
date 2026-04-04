@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Turbo cache
+.turbo/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# BAARA runtime data
+~/.baara
+
+# Brainstorm artifacts
+.superpowers/
+
+# Bun lockfile (regenerated on install)
+bun.lock
+
+# Agent status docs
+docs/plans/agent-welder-status.md

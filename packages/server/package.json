@@ -1,0 +1,23 @@
+{
+  "name": "@baara-next/server",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@baara-next/core": "workspace:*",
+    "@baara-next/store": "workspace:*",
+    "@baara-next/orchestrator": "workspace:*",
+    "@baara-next/transport": "workspace:*",
+    "@baara-next/mcp": "workspace:*",
+    "@anthropic-ai/claude-agent-sdk": "^0.2",
+    "hono": "^4"
+  },
+  "devDependencies": {
+    "typescript": "^5.8"
+  }
+}

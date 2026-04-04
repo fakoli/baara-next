@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "baara": {
+      "command": "baara",
+      "args": ["mcp-server", "--data-dir", "~/.baara"],
+      "description": "BAARA Next — 27 tools for creating, running, and monitoring durable tasks"
+    }
+  }
+}

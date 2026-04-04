@@ -1,0 +1,19 @@
+{
+  "name": "@baara-next/orchestrator",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@baara-next/core": "workspace:*",
+    "@baara-next/store": "workspace:*",
+    "croner": "^10"
+  },
+  "devDependencies": {
+    "typescript": "^5.8"
+  }
+}

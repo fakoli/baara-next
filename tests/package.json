@@ -1,0 +1,16 @@
+{
+  "name": "@baara-next/smoke-tests",
+  "private": true,
+  "version": "0.0.1",
+  "dependencies": {
+    "@baara-next/store": "workspace:*",
+    "@baara-next/orchestrator": "workspace:*",
+    "@baara-next/agent": "workspace:*",
+    "@baara-next/executor": "workspace:*",
+    "@baara-next/transport": "workspace:*",
+    "@baara-next/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
