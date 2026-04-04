@@ -116,15 +116,18 @@ export function chatRoutes(deps: ChatDeps): Hono {
       const agentToolCalls: Array<{ name: string; input: unknown; output: unknown | null }> = [];
 
       try {
-        const isDev = process.env["NODE_ENV"] === "development";
-        const permissionMode = isDev ? "bypassPermissions" : "default";
+        // The web UI chat always bypasses MCP tool permissions because:
+        // 1. The user explicitly typed the request (their intent is clear)
+        // 2. These are our own MCP tools, not external ones
+        // 3. Auth is enforced at the API level (BAARA_API_KEY), not per-tool
+        const permissionMode = "bypassPermissions";
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const options: Record<string, unknown> = {
           systemPrompt,
           mcpServers: { baara: mcpServer },
           permissionMode,
-          ...(isDev ? { allowDangerouslySkipPermissions: true } : {}),
+          allowDangerouslySkipPermissions: true,
           maxTurns: 20,
           maxBudgetUsd: 0.5,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
