@@ -11,6 +11,7 @@ import type {
   Thread,
   SSEEvent,
   ThreadMessage,
+  PermissionMode,
 } from '../types.ts';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -151,12 +152,30 @@ export function fetchThreadMessages(threadId: string): Promise<ThreadMessage[]> 
 // The caller is responsible for cancelling the AbortController on unmount.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Permissions
+// ---------------------------------------------------------------------------
+
+export type PermissionDecision = 'allow' | 'allow_task' | 'deny';
+
+export function respondToPermission(
+  requestId: string,
+  decision: PermissionDecision
+): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>('/api/chat/permission', {
+    method: 'POST',
+    body: JSON.stringify({ requestId, decision }),
+  });
+}
+
 export async function* streamChat(
   message: string,
   opts: {
     sessionId?: string;
     threadId?: string;
     activeProjectId?: string | null;
+    permissionMode?: PermissionMode;
+    model?: string;
     signal?: AbortSignal;
   }
 ): AsyncGenerator<SSEEvent> {
@@ -168,6 +187,8 @@ export async function* streamChat(
       sessionId: opts.sessionId,
       threadId: opts.threadId,
       activeProjectId: opts.activeProjectId,
+      permissionMode: opts.permissionMode ?? 'auto',
+      model: opts.model,
     }),
     signal: opts.signal,
   });

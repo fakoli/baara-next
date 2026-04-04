@@ -186,7 +186,10 @@ export type SSEEventType =
   | 'tool_result'
   | 'result'
   | 'error'
-  | 'done';
+  | 'done'
+  | 'permission_request';
+
+export type PermissionMode = 'auto' | 'ask' | 'locked';
 
 export interface SSESystemEvent {
   type: 'system';
@@ -232,6 +235,13 @@ export interface SSEDoneEvent {
   type: 'done';
 }
 
+export interface SSEPermissionRequestEvent {
+  type: 'permission_request';
+  requestId: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+}
+
 export type SSEEvent =
   | SSESystemEvent
   | SSETextEvent
@@ -240,7 +250,8 @@ export type SSEEvent =
   | SSEToolResultEvent
   | SSEResultEvent
   | SSEErrorEvent
-  | SSEDoneEvent;
+  | SSEDoneEvent
+  | SSEPermissionRequestEvent;
 
 // ---------------------------------------------------------------------------
 // Chat messages (local UI model)

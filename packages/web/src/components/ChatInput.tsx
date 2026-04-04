@@ -1,13 +1,46 @@
 import { useRef, useEffect } from 'react';
 import { useChatStore } from '../stores/chat-store.ts';
+import type { PermissionMode } from '../types.ts';
 
 interface ChatInputProps {
   toolCount?: number;
 }
 
+// Ordered cycle: auto -> ask -> locked -> auto
+const PERMISSION_MODES: PermissionMode[] = ['auto', 'ask', 'locked'];
+
+const PERMISSION_MODE_CONFIG: Record<
+  PermissionMode,
+  { label: string; dotColor: string; title: string }
+> = {
+  auto: {
+    label: 'Auto',
+    dotColor: '#22c55e',
+    title: 'Auto mode: all tools execute immediately',
+  },
+  ask: {
+    label: 'Ask',
+    dotColor: '#eab308',
+    title: 'Ask mode: tools require approval before executing',
+  },
+  locked: {
+    label: 'Locked',
+    dotColor: '#ef4444',
+    title: 'Locked mode: only previously-approved tools can execute',
+  },
+};
+
 export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
-  const { streaming, sessionCostUsd, sendMessage } = useChatStore();
+  const { streaming, sessionCostUsd, sendMessage, permissionMode, setPermissionMode } = useChatStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function cyclePermissionMode() {
+    const idx = PERMISSION_MODES.indexOf(permissionMode);
+    const next = PERMISSION_MODES[(idx + 1) % PERMISSION_MODES.length]!;
+    setPermissionMode(next);
+  }
+
+  const modeConfig = PERMISSION_MODE_CONFIG[permissionMode];
   const abortRef = useRef<AbortController | null>(null);
 
   // Auto-resize textarea
@@ -133,7 +166,46 @@ export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
           padding: '0 4px',
         }}
       >
-        <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--text-muted)' }}>
+        <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--text-muted)', alignItems: 'center' }}>
+          {/* Permission mode toggle */}
+          <button
+            onClick={cyclePermissionMode}
+            title={modeConfig.title}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              background: 'var(--bg-active)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              padding: '2px 8px',
+              cursor: 'pointer',
+              fontSize: 11,
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-body)',
+              transition: 'border-color 0.12s',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                background: modeConfig.dotColor,
+                borderRadius: '50%',
+                display: 'inline-block',
+                flexShrink: 0,
+              }}
+            />
+            <span>{modeConfig.label}</span>
+            <span style={{ opacity: 0.5, fontSize: 9 }}>▾</span>
+          </button>
+
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span
               style={{
@@ -147,7 +219,27 @@ export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
             {toolCount} tools
           </span>
           <span>·</span>
-          <span>sonnet 4.6</span>
+          {/* Model selector */}
+          <select
+            value={useChatStore.getState().model ?? 'claude-sonnet-4-20250514'}
+            onChange={(e) => useChatStore.getState().setModel(e.target.value)}
+            style={{
+              background: 'var(--bg-active)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              padding: '1px 4px',
+              color: 'var(--text-secondary)',
+              fontSize: 11,
+              fontFamily: 'var(--font-body)',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+            title="Select Claude model for chat"
+          >
+            <option value="claude-sonnet-4-20250514">sonnet 4.6</option>
+            <option value="claude-opus-4-20250514">opus 4.6</option>
+            <option value="claude-haiku-4-20250414">haiku 4.5</option>
+          </select>
         </div>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
           ${sessionCostUsd.toFixed(2)} this session

@@ -1,7 +1,14 @@
 import { create } from 'zustand';
-import type { ChatMessage, Thread } from '../types.ts';
-import { streamChat, fetchThreadMessages } from '../lib/api.ts';
+import type { ChatMessage, Thread, PermissionMode } from '../types.ts';
+import { streamChat, fetchThreadMessages, respondToPermission } from '../lib/api.ts';
+import type { PermissionDecision } from '../lib/api.ts';
 import { useThreadStore } from './thread-store.ts';
+
+export interface PendingPermission {
+  requestId: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+}
 
 interface ChatStore {
   messages: ChatMessage[];
@@ -14,9 +21,22 @@ interface ChatStore {
   /** Total tool invocations this session */
   toolCallCount: number;
 
+  /** Current permission mode — controls whether tools execute automatically */
+  permissionMode: PermissionMode;
+  /** Tools approved for the duration of the current task ("Allow for task") */
+  approvedTools: Set<string>;
+  /** Pending permission request waiting for user response */
+  pendingPermission: PendingPermission | null;
+
+  /** Selected Claude model for chat */
+  model: string;
+
   sendMessage: (text: string, abortSignal?: AbortSignal) => Promise<void>;
   loadThread: (thread: Thread) => void;
   clearChat: () => void;
+  setPermissionMode: (mode: PermissionMode) => void;
+  respondToPermission: (requestId: string, decision: PermissionDecision) => void;
+  setModel: (model: string) => void;
 }
 
 function newUserMessage(text: string): ChatMessage {
@@ -49,6 +69,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   error: null,
   sessionCostUsd: 0,
   toolCallCount: 0,
+  model: 'claude-sonnet-4-20250514',
+  permissionMode: 'auto',
+  approvedTools: new Set<string>(),
+  pendingPermission: null,
 
   sendMessage: async (text, abortSignal) => {
     if (get().streaming) return;
@@ -66,6 +90,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       const gen = streamChat(text, {
         sessionId: get().sessionId ?? undefined,
         threadId: get().threadId ?? undefined,
+        permissionMode: get().permissionMode,
+        model: get().model,
         signal: abortSignal,
       });
 
@@ -157,6 +183,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             break;
           }
 
+          case 'permission_request': {
+            set({
+              pendingPermission: {
+                requestId: event.requestId,
+                toolName: event.toolName,
+                toolInput: event.toolInput,
+              },
+            });
+            break;
+          }
+
           case 'done': {
             set((s) => ({
               messages: s.messages.map((m) =>
@@ -241,6 +278,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       error: null,
       sessionCostUsd: 0,
       toolCallCount: 0,
+      pendingPermission: null,
+      approvedTools: new Set<string>(),
+    });
+  },
+
+  setPermissionMode: (mode) => {
+    set({ permissionMode: mode });
+  },
+
+  setModel: (model) => {
+    set({ model });
+  },
+
+  respondToPermission: (requestId, decision) => {
+    // Capture the tool name before clearing state
+    const pending = get().pendingPermission;
+
+    // Clear the pending permission immediately so the UI is no longer blocked
+    set({ pendingPermission: null });
+
+    // For "allow_task", remember the tool so future calls are auto-approved
+    if (decision === 'allow_task' && pending) {
+      set((s) => ({
+        approvedTools: new Set([...s.approvedTools, pending.toolName]),
+      }));
+    }
+
+    // Fire-and-forget; the server resolves the waiting Promise
+    void respondToPermission(requestId, decision).catch((err: unknown) => {
+      console.error('[chat] respondToPermission failed', err);
     });
   },
 }));

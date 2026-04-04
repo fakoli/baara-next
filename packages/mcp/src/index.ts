@@ -1,7 +1,7 @@
 // @baara-next/mcp — Public API barrel
 
-export { createBaaraMcpServer } from "./server.ts";
-export type { BaaraMcpServerDeps } from "./server.ts";
+export { createBaaraMcpServer, createAllTools, handleJsonRpc } from "./server.ts";
+export type { BaaraMcpServerDeps, McpTool } from "./server.ts";
 
 export { createMcpHttpApp } from "./http.ts";
 export type { McpHttpAppDeps } from "./http.ts";
