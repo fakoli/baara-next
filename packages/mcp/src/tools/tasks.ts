@@ -82,6 +82,7 @@ export function createTaskTools(deps: {
       timeoutMs: z.number().int().min(1000).max(3600000).optional().describe("Timeout in ms (default: 30000)"),
       allowedTools: z.array(z.string()).optional().describe("Agent SDK tool names this task may use"),
       projectId: z.string().optional().describe("Project UUID to associate the task with"),
+      targetThreadId: z.string().optional().describe("Thread UUID to route task output to; omit to use the Main thread"),
     },
     async (args) => {
       try {
@@ -115,6 +116,7 @@ export function createTaskTools(deps: {
           maxRetries: args.maxRetries,
           timeoutMs: args.timeoutMs,
           projectId: args.projectId ?? null,
+          targetThreadId: args.targetThreadId ?? null,
           agentConfig: args.allowedTools ? { allowedTools: args.allowedTools } : null,
         });
         return ok(task);
@@ -142,6 +144,7 @@ export function createTaskTools(deps: {
       enabled: z.boolean().optional().describe("Enable or disable the task"),
       allowedTools: z.array(z.string()).optional().describe("Allowed tool names"),
       projectId: z.string().nullable().optional().describe("Project UUID; pass null to unassign"),
+      targetThreadId: z.string().nullable().optional().describe("Thread UUID for output routing; pass null to use the Main thread"),
     },
     async (args) => {
       const task = resolveTask(store, args.nameOrId);

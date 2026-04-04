@@ -50,6 +50,8 @@ export interface Task {
   executionMode: ExecutionMode;
   enabled: boolean;
   projectId?: string | null;
+  /** Thread that receives task completion output. Null means use the Main thread. */
+  targetThreadId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -68,6 +70,7 @@ export interface CreateTaskInput {
   executionMode?: ExecutionMode;
   enabled?: boolean;
   projectId?: string | null;
+  targetThreadId?: string | null;
 }
 
 export interface UpdateTaskInput {
@@ -84,6 +87,7 @@ export interface UpdateTaskInput {
   executionMode?: ExecutionMode;
   enabled?: boolean;
   projectId?: string | null;
+  targetThreadId?: string | null;
 }
 
 export interface Execution {

@@ -1,7 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useThreadStore } from '../stores/thread-store.ts';
 import { useChatStore } from '../stores/chat-store.ts';
 import type { Thread } from '../types.ts';
+import { fetchThreadMessages } from '../lib/api.ts';
+
+/** Mirror of MAIN_THREAD_ID from @baara-next/core — kept client-side to avoid a build dep. */
+const MAIN_THREAD_ID = '00000000-0000-0000-0000-000000000000';
 
 // Group threads by date bucket: Today / Yesterday / This Week / Older
 function groupThreads(threads: Thread[]): Map<string, Thread[]> {
@@ -51,9 +55,34 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
   const { threads, activeThreadId, fetchThreads, setActiveThread } = useThreadStore();
   const { clearChat, loadThread } = useChatStore();
 
+  // Unread count for the Main thread — count of completion messages since the
+  // thread was last viewed.  We track the message count at last-view time so
+  // we can compute a delta.
+  const [mainUnreadCount, setMainUnreadCount] = useState(0);
+  const [mainLastSeenCount, setMainLastSeenCount] = useState(0);
+
   useEffect(() => {
     void fetchThreads();
   }, [fetchThreads]);
+
+  // Poll the Main thread message count so the badge updates when new task
+  // completions arrive.  We refresh every 15 seconds.
+  const refreshMainUnread = useCallback(async () => {
+    try {
+      const messages = await fetchThreadMessages(MAIN_THREAD_ID);
+      // Only agent messages from the orchestrator count as "completion" messages.
+      const completionCount = messages.filter((m) => m.role === 'agent').length;
+      setMainUnreadCount(Math.max(0, completionCount - mainLastSeenCount));
+    } catch {
+      // Silently ignore — the thread may not exist yet on a fresh database.
+    }
+  }, [mainLastSeenCount]);
+
+  useEffect(() => {
+    void refreshMainUnread();
+    const interval = setInterval(() => void refreshMainUnread(), 15_000);
+    return () => clearInterval(interval);
+  }, [refreshMainUnread]);
 
   function handleNewThread() {
     setActiveThread(null);
@@ -63,9 +92,21 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
   function handleSelectThread(t: Thread) {
     setActiveThread(t.id);
     loadThread(t);
+    // If the user opens the Main thread, mark all current messages as seen.
+    if (t.id === MAIN_THREAD_ID) {
+      fetchThreadMessages(MAIN_THREAD_ID)
+        .then((messages) => {
+          const completionCount = messages.filter((m) => m.role === 'agent').length;
+          setMainLastSeenCount(completionCount);
+          setMainUnreadCount(0);
+        })
+        .catch(() => {});
+    }
   }
 
-  const grouped = groupThreads(threads);
+  const mainThread = threads.find((t) => t.id === MAIN_THREAD_ID) ?? null;
+  const otherThreads = threads.filter((t) => t.id !== MAIN_THREAD_ID);
+  const grouped = groupThreads(otherThreads);
 
   return (
     <aside
@@ -166,7 +207,24 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
           padding: '0 8px 12px',
         }}
       >
-        {grouped.size === 0 && (
+        {/* ------------------------------------------------------------------ */}
+        {/* Pinned Main thread — always at the top                              */}
+        {/* ------------------------------------------------------------------ */}
+        {mainThread && (
+          <div style={{ marginBottom: 6 }}>
+            <MainThreadRow
+              thread={mainThread}
+              isActive={activeThreadId === mainThread.id}
+              unreadCount={mainUnreadCount}
+              onSelect={handleSelectThread}
+            />
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------------ */}
+        {/* Grouped user threads                                                */}
+        {/* ------------------------------------------------------------------ */}
+        {grouped.size === 0 && !mainThread && (
           <p
             style={{
               padding: '16px 8px',
@@ -264,6 +322,93 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
         ))}
       </div>
     </aside>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MainThreadRow — pinned row with bold styling, pin icon, and unread badge
+// ---------------------------------------------------------------------------
+
+interface MainThreadRowProps {
+  thread: Thread;
+  isActive: boolean;
+  unreadCount: number;
+  onSelect: (t: Thread) => void;
+}
+
+function MainThreadRow({ thread, isActive, unreadCount, onSelect }: MainThreadRowProps) {
+  return (
+    <button
+      onClick={() => onSelect(thread)}
+      style={{
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 10px',
+        borderRadius: 7,
+        cursor: 'pointer',
+        background: isActive ? 'var(--bg-active)' : 'var(--bg-raised)',
+        border: '1px solid var(--border)',
+        textAlign: 'left',
+        transition: 'background 0.12s',
+        fontFamily: 'var(--font-body)',
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = isActive ? 'var(--bg-active)' : 'var(--bg-raised)';
+      }}
+    >
+      {/* Pin icon */}
+      <svg
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        style={{ color: 'var(--accent)', flexShrink: 0 }}
+      >
+        <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
+      </svg>
+
+      {/* Thread title */}
+      <span
+        style={{
+          flex: 1,
+          fontSize: 13,
+          fontWeight: 700,
+          color: 'var(--text-primary)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {thread.title}
+      </span>
+
+      {/* Unread badge */}
+      {unreadCount > 0 && (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+            background: 'var(--accent)',
+            color: 'white',
+            fontSize: 10,
+            fontWeight: 700,
+            padding: '0 5px',
+            flexShrink: 0,
+          }}
+        >
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
+    </button>
   );
 }
 

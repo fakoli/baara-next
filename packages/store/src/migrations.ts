@@ -274,6 +274,27 @@ const MIGRATIONS: Migration[] = [
         ON thread_messages(thread_id, created_at ASC);
     `,
   },
+  {
+    version: 5,
+    description: "Seed the Main thread; add target_thread_id to tasks",
+    up: `
+      -- Ensure the Main thread (well-known ID) always exists.
+      -- This row is pinned at the top of the sidebar and receives task
+      -- completion output when no per-task targetThreadId is set.
+      INSERT OR IGNORE INTO threads (id, title, created_at, updated_at)
+      VALUES (
+        '00000000-0000-0000-0000-000000000000',
+        'Main',
+        datetime('now'),
+        datetime('now')
+      );
+
+      -- Allow each task to designate an output thread.  NULL means the Main
+      -- thread is used.  ON DELETE SET NULL keeps the task alive if the target
+      -- thread is deleted (it will fall back to Main at routing time).
+      ALTER TABLE tasks ADD COLUMN target_thread_id TEXT REFERENCES threads(id) ON DELETE SET NULL;
+    `,
+  },
 ];
 
 // ---------------------------------------------------------------------------

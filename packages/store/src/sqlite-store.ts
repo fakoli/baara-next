@@ -87,8 +87,8 @@ export class SQLiteStore implements IStore {
         `INSERT INTO tasks (
           id, name, description, prompt, cron_expression,
           timeout_ms, sandbox_type, sandbox_config, agent_config, priority, target_queue,
-          max_retries, execution_mode, enabled, project_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          max_retries, execution_mode, enabled, project_id, target_thread_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           input.name,
@@ -105,6 +105,7 @@ export class SQLiteStore implements IStore {
           input.executionMode ?? "queued",
           input.enabled !== false ? 1 : 0,
           input.projectId ?? null,
+          input.targetThreadId ?? null,
         ]
       );
     } catch (err: unknown) {
@@ -144,6 +145,7 @@ export class SQLiteStore implements IStore {
     if (input.executionMode !== undefined) { fields.push("execution_mode = ?"); values.push(input.executionMode); }
     if (input.enabled !== undefined) { fields.push("enabled = ?"); values.push(input.enabled ? 1 : 0); }
     if (input.projectId !== undefined) { fields.push("project_id = ?"); values.push(input.projectId ?? null); }
+    if (input.targetThreadId !== undefined) { fields.push("target_thread_id = ?"); values.push(input.targetThreadId ?? null); }
 
     if (fields.length === 0) return existing;
 
@@ -853,6 +855,7 @@ function rowToTask(row: unknown): Task {
     executionMode: r["execution_mode"] as Task["executionMode"],
     enabled: (r["enabled"] as number) === 1,
     projectId: (r["project_id"] as string | null) ?? null,
+    targetThreadId: (r["target_thread_id"] as string | null) ?? null,
     createdAt: r["created_at"] as string,
     updatedAt: r["updated_at"] as string,
   };

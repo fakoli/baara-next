@@ -26,6 +26,7 @@ import {
   ExecutionNotFoundError,
   InvalidStateTransitionError,
   isTerminal,
+  MAIN_THREAD_ID,
 } from "@baara-next/core";
 import { QueueManager } from "./queue-manager.ts";
 import { HealthMonitor } from "./health-monitor.ts";
@@ -500,6 +501,64 @@ export class OrchestratorService implements IOrchestratorService {
 
     emitTerminalFromResult(this.store, executionId, result);
     this.queueManager.enqueueVisibility(executionId, terminalStatus);
+
+    // -----------------------------------------------------------------------
+    // Output routing — link the execution to a thread and append a summary
+    // message so the thread shows completion status in the sidebar.
+    // -----------------------------------------------------------------------
+    try {
+      const targetThreadId = task?.targetThreadId ?? null;
+      const routeToThreadId = targetThreadId ?? MAIN_THREAD_ID;
+
+      // Only route to threads that exist.  The Main thread is seeded by
+      // migration 5, so it should always be present.  A custom targetThreadId
+      // may have been deleted — in that case, fall back to Main.
+      const routeThread = this.store.getThread(routeToThreadId)
+        ?? (routeToThreadId !== MAIN_THREAD_ID ? this.store.getThread(MAIN_THREAD_ID) : null);
+
+      if (routeThread) {
+        this.store.linkExecutionToThread(executionId, routeThread.id);
+
+        // Build a human-readable summary message.
+        const taskName = task?.name ?? execution.taskId;
+        let summaryContent: string;
+        if (terminalStatus === "completed") {
+          const durationSec = result.durationMs != null
+            ? (result.durationMs / 1000).toFixed(1)
+            : null;
+          const durationLabel = durationSec != null ? ` in ${durationSec}s` : "";
+          const outputSnippet = result.output
+            ? `\nOutput: ${result.output.length > 500 ? result.output.slice(0, 500) + "…" : result.output}`
+            : "";
+          summaryContent = `Task "${taskName}" completed${durationLabel}.${outputSnippet}`;
+        } else {
+          const durationSec = result.durationMs != null
+            ? (result.durationMs / 1000).toFixed(1)
+            : null;
+          const durationLabel = durationSec != null ? ` after ${durationSec}s` : "";
+          const attemptLabel = ` (attempt ${execution.attempt}/${(task?.maxRetries ?? 0) + 1})`;
+          const errorSnippet = result.error
+            ? `\nError: ${result.error.length > 300 ? result.error.slice(0, 300) + "…" : result.error}`
+            : "";
+          summaryContent = `Task "${taskName}" ${terminalStatus}${durationLabel}${attemptLabel}.${errorSnippet}`;
+        }
+
+        this.store.appendThreadMessage({
+          id: crypto.randomUUID(),
+          threadId: routeThread.id,
+          role: "agent",
+          content: summaryContent,
+          toolCalls: "[]",
+        });
+      }
+    } catch (routingErr) {
+      // Output routing is best-effort; never let a routing failure mask the
+      // primary completion handling above.
+      console.warn(
+        `[orchestrator] Output routing failed for execution ${executionId}:`,
+        routingErr
+      );
+    }
 
     // Retry or dead-letter for failure paths.
     if (terminalStatus === "failed" || terminalStatus === "timed_out") {

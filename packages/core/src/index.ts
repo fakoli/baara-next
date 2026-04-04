@@ -4,6 +4,9 @@
 // the state machine, and interface contracts.  Nothing here has runtime
 // behaviour beyond the error classes and the state machine transition map.
 
+// --- Constants ---
+export { MAIN_THREAD_ID } from "./types.ts";
+
 // --- Types ---
 export type {
   Priority,

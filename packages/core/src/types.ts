@@ -1,6 +1,17 @@
 // @baara-next/core — Shared Entity Types
 
 // ---------------------------------------------------------------------------
+// Well-known IDs
+// ---------------------------------------------------------------------------
+
+/**
+ * The well-known UUID for the "Main" thread that always exists and is pinned
+ * at the top of the sidebar.  Task output goes here by default when no
+ * targetThreadId is set on the task.
+ */
+export const MAIN_THREAD_ID = "00000000-0000-0000-0000-000000000000" as const;
+
+// ---------------------------------------------------------------------------
 // Primitive union types
 // ---------------------------------------------------------------------------
 
@@ -161,6 +172,11 @@ export interface Task {
   enabled: boolean;
   /** Optional grouping; null means the task belongs to no project. */
   projectId?: string | null;
+  /**
+   * Thread that receives task completion output.  Null means use the
+   * Main thread (MAIN_THREAD_ID).
+   */
+  targetThreadId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -182,6 +198,7 @@ export interface CreateTaskInput {
   executionMode?: ExecutionMode;
   enabled?: boolean;
   projectId?: string | null;
+  targetThreadId?: string | null;
 }
 
 export interface UpdateTaskInput {
@@ -201,6 +218,7 @@ export interface UpdateTaskInput {
   executionMode?: ExecutionMode;
   enabled?: boolean;
   projectId?: string | null;
+  targetThreadId?: string | null;
 }
 
 // ---------------------------------------------------------------------------

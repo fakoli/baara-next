@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Task, ExecutionType, ExecutionMode, Priority } from '../types.ts';
 import { updateTask } from '../lib/api.ts';
 import { useTaskStore } from '../stores/task-store.ts';
+import { useThreadStore } from '../stores/thread-store.ts';
+
+/** Mirror of MAIN_THREAD_ID from @baara-next/core — kept client-side to avoid a build dep. */
+const MAIN_THREAD_ID = '00000000-0000-0000-0000-000000000000';
 
 interface TaskEditorProps {
   task: Task;
@@ -34,6 +38,7 @@ const labelStyle: React.CSSProperties = {
 
 export default function TaskEditor({ task, onClose }: TaskEditorProps) {
   const fetchTasks = useTaskStore((s) => s.fetchTasks);
+  const { threads, fetchThreads } = useThreadStore();
 
   const [name, setName] = useState(task.name);
   const [prompt, setPrompt] = useState(task.prompt);
@@ -43,6 +48,9 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
   const [cronExpression, setCronExpression] = useState(task.cronExpression ?? '');
   const [maxRetries, setMaxRetries] = useState(task.maxRetries);
   const [timeoutMs, setTimeoutMs] = useState(task.timeoutMs);
+  const [targetThreadId, setTargetThreadId] = useState<string>(
+    task.targetThreadId ?? MAIN_THREAD_ID
+  );
 
   // agentConfig fields
   const [allowedTools, setAllowedTools] = useState(
@@ -58,6 +66,10 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchThreads();
+  }, [fetchThreads]);
 
   async function handleSave() {
     setSaving(true);
@@ -93,6 +105,9 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
         maxRetries,
         timeoutMs,
         agentConfig: Object.keys(agentConfig).length > 0 ? agentConfig : null,
+        // Store null when Main thread is chosen so the orchestrator's default
+        // routing logic applies (saves storage and handles Main thread renames).
+        targetThreadId: targetThreadId === MAIN_THREAD_ID ? null : targetThreadId,
       });
 
       // Refresh the task list so the sidebar reflects the new values
@@ -104,6 +119,14 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
       setSaving(false);
     }
   }
+
+  // Build dropdown options: Main thread first, then all other threads.
+  const threadOptions = [
+    { id: MAIN_THREAD_ID, label: 'Main Thread (default)' },
+    ...threads
+      .filter((t) => t.id !== MAIN_THREAD_ID)
+      .map((t) => ({ id: t.id, label: t.title || 'Untitled thread' })),
+  ];
 
   return (
     <div
@@ -258,6 +281,22 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
               style={fieldStyle}
             />
           </div>
+        </div>
+
+        {/* Output Thread */}
+        <div>
+          <label style={labelStyle}>Output Thread</label>
+          <select
+            value={targetThreadId}
+            onChange={(e) => setTargetThreadId(e.target.value)}
+            style={fieldStyle}
+          >
+            {threadOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Agent config section */}
