@@ -120,7 +120,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             }
             return (
               <ToolIndicator
-                key={i}
+                key={`${tc.name}-${i}`}
                 name={tc.name}
                 detail={extractToolDetail(tc)}
                 completed={tc.output !== null || !message.streaming}
@@ -135,7 +135,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           .filter((tc) => tc.output !== null)
           .map((tc, i) => (
             <InlineCard
-              key={i}
+              key={`${tc.name}-result-${i}`}
               data={tc.output}
               onAction={handleCardAction}
               onHitlRespond={handleHitlRespond}

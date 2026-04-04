@@ -421,8 +421,10 @@ export class OrchestratorService implements IOrchestratorService {
 
       const task = this.store.getTask(execution.taskId);
       if (!task) {
-        // Task was deleted after dequeue; transition through running before failing.
-        // The state machine requires assigned → running before running → failed.
+        // Task was deleted after dequeue — there is nothing to retry against, so
+        // this execution is dead on arrival.  We skip the normal retry logic and
+        // go directly to a terminal failure state.  The state machine requires
+        // assigned → running before running → failed, so we hop through running.
         this.store.updateExecutionStatus(execution.id, "running");
         this.store.updateExecutionStatus(execution.id, "failed", {
           error: `Task ${execution.taskId} not found`,
@@ -559,7 +561,7 @@ export class OrchestratorService implements IOrchestratorService {
     } catch (routingErr) {
       // Output routing is best-effort; never let a routing failure mask the
       // primary completion handling above.
-      console.warn(
+      console.error(
         `[orchestrator] Output routing failed for execution ${executionId}:`,
         routingErr
       );

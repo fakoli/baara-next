@@ -281,6 +281,10 @@ const MIGRATIONS: Migration[] = [
       -- Ensure the Main thread (well-known ID) always exists.
       -- This row is pinned at the top of the sidebar and receives task
       -- completion output when no per-task targetThreadId is set.
+      --
+      -- INSERT OR IGNORE makes this migration re-runnable: if the row already
+      -- exists (e.g. created manually or by a previous partial run) it is left
+      -- untouched so that operator-edited titles are never overwritten.
       INSERT OR IGNORE INTO threads (id, title, created_at, updated_at)
       VALUES (
         '00000000-0000-0000-0000-000000000000',

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTaskStore } from '../stores/task-store.ts';
 import { useExecutionStore } from '../stores/execution-store.ts';
 import { useQueueStore } from '../stores/queue-store.ts';
@@ -182,6 +182,7 @@ function TaskItem({
 
 function ExecutionsTab({ search }: { search: string }) {
   const { executions, fetchExecutions } = useExecutionStore();
+  const { tasks } = useTaskStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -205,14 +206,18 @@ function ExecutionsTab({ search }: { search: string }) {
   return (
     <div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {filtered.slice(0, 20).map((exec) => (
+        {filtered.slice(0, 20).map((exec) => {
+          const taskName = tasks.find((t) => t.id === exec.taskId)?.name ?? null;
+          return (
           <ExecutionItem
             key={exec.id}
             execution={exec}
+            taskName={taskName}
             active={exec.id === selectedId}
             onClick={() => setSelectedId(exec.id === selectedId ? null : exec.id)}
           />
-        ))}
+          );
+        })}
       </div>
       {selectedExecution && (
         <ExecutionDetail
@@ -226,10 +231,12 @@ function ExecutionsTab({ search }: { search: string }) {
 
 function ExecutionItem({
   execution,
+  taskName,
   active,
   onClick,
 }: {
   execution: Execution;
+  taskName: string | null;
   active: boolean;
   onClick: () => void;
 }) {
@@ -266,7 +273,7 @@ function ExecutionItem({
             textOverflow: 'ellipsis',
           }}
         >
-          {execution.taskId.slice(0, 20)}
+          {taskName ?? execution.taskId.slice(0, 20)}
         </div>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
           {formatDuration(execution.durationMs)
@@ -353,14 +360,11 @@ function QueueItem({
   const [maxConcurrency, setMaxConcurrency] = useState(queue.maxConcurrency);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const prevMaxConcurrencyRef = useRef(queue.maxConcurrency);
 
-  // Sync local value when the queue data refreshes (moved out of render path #9)
+  // Sync local input to the latest server value whenever the panel is closed.
+  // No ref guard needed: setting state to its current value is a no-op in React.
   useEffect(() => {
-    if (!expanded && prevMaxConcurrencyRef.current !== queue.maxConcurrency) {
-      prevMaxConcurrencyRef.current = queue.maxConcurrency;
-      setMaxConcurrency(queue.maxConcurrency);
-    }
+    if (!expanded) setMaxConcurrency(queue.maxConcurrency);
   }, [expanded, queue.maxConcurrency]);
 
   async function handleSave() {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useThreadStore } from '../stores/thread-store.ts';
 import { useChatStore } from '../stores/chat-store.ts';
 import type { Thread } from '../types.ts';
@@ -59,7 +59,9 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
   // thread was last viewed.  We track the message count at last-view time so
   // we can compute a delta.
   const [mainUnreadCount, setMainUnreadCount] = useState(0);
-  const [mainLastSeenCount, setMainLastSeenCount] = useState(0);
+  // useRef instead of useState so updating mainLastSeenCount never triggers a
+  // re-render and never restarts the polling interval.
+  const mainLastSeenCountRef = useRef(0);
 
   useEffect(() => {
     void fetchThreads();
@@ -67,16 +69,18 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
 
   // Poll the Main thread message count so the badge updates when new task
   // completions arrive.  We refresh every 15 seconds.
+  // refreshMainUnread has a stable identity because it closes over the ref (not
+  // state), so the interval is never torn down and recreated unnecessarily.
   const refreshMainUnread = useCallback(async () => {
     try {
       const messages = await fetchThreadMessages(MAIN_THREAD_ID);
       // Only agent messages from the orchestrator count as "completion" messages.
       const completionCount = messages.filter((m) => m.role === 'agent').length;
-      setMainUnreadCount(Math.max(0, completionCount - mainLastSeenCount));
+      setMainUnreadCount(Math.max(0, completionCount - mainLastSeenCountRef.current));
     } catch {
       // Silently ignore — the thread may not exist yet on a fresh database.
     }
-  }, [mainLastSeenCount]);
+  }, []);
 
   useEffect(() => {
     void refreshMainUnread();
@@ -97,7 +101,7 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
       fetchThreadMessages(MAIN_THREAD_ID)
         .then((messages) => {
           const completionCount = messages.filter((m) => m.role === 'agent').length;
-          setMainLastSeenCount(completionCount);
+          mainLastSeenCountRef.current = completionCount;
           setMainUnreadCount(0);
         })
         .catch(() => {});
@@ -211,7 +215,7 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
         {/* Pinned Main thread — always at the top                              */}
         {/* ------------------------------------------------------------------ */}
         {mainThread && (
-          <div style={{ marginBottom: 6 }}>
+          <div style={{ paddingBottom: 8, marginBottom: 4, borderBottom: '1px solid var(--border)' }}>
             <MainThreadRow
               thread={mainThread}
               isActive={activeThreadId === mainThread.id}
@@ -358,7 +362,7 @@ function MainThreadRow({ thread, isActive, unreadCount, onSelect }: MainThreadRo
         if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
       }}
       onMouseLeave={(e) => {
-        if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = isActive ? 'var(--bg-active)' : 'var(--bg-raised)';
+        if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-raised)';
       }}
     >
       {/* Pin icon */}

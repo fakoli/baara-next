@@ -233,9 +233,15 @@ export function chatRoutes(deps: ChatDeps): Hono {
     // Build context and system prompt synchronously before streaming starts
     const ctx = gatherChatContext(deps.store, { threadId, activeProjectId });
     const basePrompt = buildSystemPrompt(ctx);
-    // Prepend custom user instructions when provided, wrapped in XML tags (#3)
+    // Prepend custom user instructions when provided, wrapped in XML tags (#3).
+    // Escape < and > so user-supplied text cannot inject or close the wrapper tag.
     const systemPrompt = systemInstructions?.trim()
-      ? `<user_instructions>\n${systemInstructions.trim()}\n</user_instructions>\n\n${basePrompt}`
+      ? (() => {
+          const safeInstructions = systemInstructions.trim()
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+          return `<user_instructions>\n${safeInstructions}\n</user_instructions>\n\n${basePrompt}`;
+        })()
       : basePrompt;
 
     // Resolve or generate a session ID

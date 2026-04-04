@@ -87,12 +87,14 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
 
       const agentConfig = {
         ...(task.agentConfig ?? {}),
-        ...(model.trim() ? { model: model.trim() } : {}),
+        // Setting to undefined explicitly removes the key so a previously-set
+        // value is cleared when the user empties the field.
+        model: model.trim() || undefined,
         ...(allowedTools.trim()
           ? { allowedTools: allowedTools.split(',').map((s) => s.trim()).filter(Boolean) }
           : {}),
         ...(budgetUsd.trim() ? { budgetUsd: Number(budgetUsd) } : {}),
-        ...(systemPrompt.trim() ? { systemPrompt: systemPrompt.trim() } : {}),
+        systemPrompt: systemPrompt.trim() || undefined,
       };
 
       await updateTask(task.id, {

@@ -67,8 +67,13 @@ export function queueRoutes(store: IStore): Hono {
     } catch {
       return c.json({ error: "Invalid JSON body" }, 400);
     }
-    if (body.maxConcurrency === undefined || typeof body.maxConcurrency !== "number" || body.maxConcurrency < 1) {
-      return c.json({ error: "maxConcurrency must be a positive number" }, 400);
+    if (
+      body.maxConcurrency === undefined ||
+      typeof body.maxConcurrency !== "number" ||
+      !Number.isInteger(body.maxConcurrency) ||
+      body.maxConcurrency < 1
+    ) {
+      return c.json({ error: "maxConcurrency must be a positive integer" }, 400);
     }
     const updated = store.updateQueueConcurrency(name, body.maxConcurrency);
     if (!updated) {

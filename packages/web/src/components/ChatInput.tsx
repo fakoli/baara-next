@@ -279,7 +279,7 @@ export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
           >
             <option value="claude-sonnet-4-20250514">sonnet 4.6</option>
             <option value="claude-opus-4-20250514">opus 4.6</option>
-            <option value="claude-haiku-4-20250414">haiku 4.5</option>
+            <option value="claude-haiku-4-5-20251001">haiku 4.5</option>
           </select>
           <span>·</span>
 
