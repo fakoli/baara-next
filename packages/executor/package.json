@@ -9,8 +9,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2",
     "@baara-next/core": "workspace:*",
-    "@anthropic-ai/claude-agent-sdk": "^0.2"
+    "@extism/extism": "^2.0.0-rc13"
   },
   "devDependencies": {
     "typescript": "^5.8"
