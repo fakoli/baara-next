@@ -1,10 +1,12 @@
-# BAARA Next
+<p align="center">
+  <img src="docs/assets/banner.png" alt="BAARA Next — Durable Agentic Task Execution Engine" width="100%">
+</p>
 
-**Durable agentic task execution engine**
-
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
-[![Bun](https://img.shields.io/badge/Bun-1.3%2B-black)](https://bun.sh/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-blue" alt="TypeScript"></a>
+  <a href="https://bun.sh/"><img src="https://img.shields.io/badge/Bun-1.3%2B-black" alt="Bun"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
+</p>
 
 BAARA Next runs Claude-powered agent tasks that survive process crashes, resume
 from checkpoints, and retry automatically on failure. Control tasks through a
@@ -76,32 +78,9 @@ full system with one command.
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    baara start (dev mode)                     │
-│                                                              │
-│  ┌──────────────────┐  DevTransport  ┌──────────────────┐   │
-│  │ OrchestratorService│ ─────────── │   AgentService   │   │
-│  │  queue, retry,    │              │  (polling loop)   │   │
-│  │  scheduler,       │              └────────┬─────────┘   │
-│  │  health monitor   │                       │ IRuntime     │
-│  └────────┬──────────┘                       ▼             │
-│           │ SQLite (bun:sqlite)    ┌──────────────────┐    │
-│           ▼                       │     Executor      │    │
-│  ┌──────────────────┐             │  SandboxRegistry  │    │
-│  │      Store       │             │  ┌─────────────┐  │    │
-│  │  tasks           │             │  │   Native    │  │    │
-│  │  executions      │             │  │   Wasm      │  │    │
-│  │  threads         │             │  │   Docker    │  │    │
-│  │  task_messages   │             │  └─────────────┘  │    │
-│  └──────────────────┘             └──────────────────┘    │
-│                                                            │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │                  Hono HTTP Server                    │  │
-│  │  /api/tasks  /api/executions  /api/chat  /mcp        │  │
-│  └──────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="docs/assets/architecture.png" alt="BAARA Next Architecture" width="100%">
+</p>
 
 See [docs/architecture.md](docs/architecture.md) for the full component diagram,
 state machine, and data flow.
