@@ -26,43 +26,9 @@ transport in production mode.
 
 ## Component Diagram
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                           bun start (dev)                            │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                     OrchestratorService                       │   │
-│  │  ┌──────────────┐  ┌────────────────┐  ┌──────────────────┐  │   │
-│  │  │ QueueManager │  │ RetryScheduler │  │  HealthMonitor   │  │   │
-│  │  └──────────────┘  └────────────────┘  └──────────────────┘  │   │
-│  └──────────┬──────────────────┬───────────────────┬────────────┘   │
-│             │IStore            │IMessageBus         │ISandboxRegistry│
-│             ▼                  ▼                    ▼               │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────┐│
-│  │      Store       │  │   MessageBus     │  │  SandboxRegistry   ││
-│  │  (bun:sqlite)    │  │  (task_messages  │  │  ┌──────────────┐  ││
-│  │                  │  │   SQLite table)  │  │  │NativeSandbox │  ││
-│  │  tasks           │  └──────────────────┘  │  ├──────────────┤  ││
-│  │  executions      │                         │  │ WasmSandbox  │  ││
-│  │  events          │                         │  ├──────────────┤  ││
-│  │  threads         │                         │  │DockerSandbox │  ││
-│  │  input_requests  │                         │  └──────────────┘  ││
-│  │  templates       │                         └────────────────────┘│
-│  │  projects        │                                               │
-│  └──────────────────┘                                               │
-│                                                                      │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │              AgentService (via DevTransport)                   │ │
-│  │  polls for assigned executions → calls ISandbox.execute()      │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-│                                                                      │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │                     Hono HTTP Server                           │ │
-│  │  /api/tasks   /api/executions   /api/queues                    │ │
-│  │  /api/chat (SSE)   /api/system   /internal   /mcp              │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="assets/architecture.png" alt="BAARA Next Component Diagram" width="100%">
+</p>
 
 ---
 
@@ -70,39 +36,16 @@ transport in production mode.
 
 A queued task moves through the system in six steps:
 
-```
-1. API or MCP call
-   POST /api/tasks/:id/submit
-   → OrchestratorService.submitTask()
-   → Store.createExecution() [status: created]
-   → Store.updateExecutionStatus(queued)
+<p align="center">
+  <img src="assets/data-flow.png" alt="BAARA Next Data Flow" width="100%">
+</p>
 
-2. Queue dequeue
-   OrchestratorService QueueManager tick
-   → Store.dequeueExecution() [status: assigned]
-   → DevTransport.matchTask() returns assignment to AgentService
-
-3. Agent picks up
-   AgentService.start() → polls transport
-   → orchestrator.startExecution() [status: running]
-
-4. Sandbox executes
-   NativeSandboxInstance.execute()
-   → Claude Code SDK query() with MCP tools
-   → SandboxEvent stream: log, text_delta, tool_use, tool_result, turn_complete
-   → CheckpointService writes to MessageBus every 5 turns
-
-5. Completion
-   SandboxExecuteResult returned
-   → orchestrator.handleExecutionComplete()
-   → Store.updateExecutionStatus(completed | failed | timed_out)
-   → ExecutionEvent appended to events table
-
-6. Failure → retry
-   failed | timed_out → retry_scheduled (if attempt < maxRetries)
-   → RetryScheduler re-enqueues after backoff delay
-   → maxRetries exhausted → dead_lettered
-```
+1. **API or MCP call** — `POST /api/tasks/:id/submit` → `OrchestratorService.submitTask()` → creates execution in `queued` status
+2. **Queue dequeue** — QueueManager dequeues → status transitions to `assigned` → DevTransport delivers to AgentService
+3. **Agent picks up** — AgentService polls transport → `orchestrator.startExecution()` → status transitions to `running`
+4. **Sandbox executes** — `NativeSandboxInstance.execute()` → Claude Code SDK `query()` with MCP tools → SandboxEvent stream → CheckpointService writes every 5 turns
+5. **Completion** — `orchestrator.handleExecutionComplete()` → status transitions to `completed | failed | timed_out` → ExecutionEvent appended
+6. **Failure → retry** — `failed | timed_out` → `retry_scheduled` (if `attempt < maxRetries`) → re-enqueues after backoff → exhausted → `dead_lettered`
 
 ---
 
@@ -110,49 +53,9 @@ A queued task moves through the system in six steps:
 
 All 11 execution states with valid transitions:
 
-```
-          ┌──────────┐
-          │ created  │
-          └────┬─────┘
-         queued│  cancelled
-               ▼
-          ┌──────────┐
-          │  queued  │ ──────────────── cancelled
-          └────┬─────┘
-       assigned│  timed_out
-               ▼
-          ┌──────────┐
-          │ assigned │ ──────────────── timed_out
-          └────┬─────┘
-       running │
-               ▼
-          ┌──────────┐  waiting_for_input
-          │ running  │ ─────────────────────────┐
-          └────┬─────┘                          │
-   completed   │  failed  timed_out  cancelled  ▼
-               │                     ┌────────────────────┐
-               │                     │  waiting_for_input │
-               │                     └────────┬───────────┘
-               │                   running    │ cancelled
-               │                              │
-        ┌──────▼──────┐  ┌──────────┐  ┌──────────┐
-        │  completed  │  │  failed  │  │cancelled │
-        │  (terminal) │  └────┬─────┘  │(terminal)│
-        └─────────────┘       │         └──────────┘
-                              │ retry_scheduled
-                    ┌─────────▼──────────┐
-                    │ timed_out          │──── retry_scheduled
-                    └────────────────────┘
-                              │
-                    ┌─────────▼──────────┐
-                    │  retry_scheduled   │ ──── queued  cancelled
-                    └────────────────────┘
-                              │ (if retries exhausted)
-                    ┌─────────▼──────────┐
-                    │  dead_lettered     │
-                    │  (terminal)        │
-                    └────────────────────┘
-```
+<p align="center">
+  <img src="assets/state-machine.png" alt="Execution State Machine" width="100%">
+</p>
 
 Terminal states — `completed`, `cancelled`, `dead_lettered` — have no outgoing
 transitions. The state machine is enforced by `validateTransition()` in
@@ -185,32 +88,9 @@ All three sandbox implementations share a single interface (`ISandbox`) and a
 single execution engine (Claude Code SDK). What changes between sandboxes is the
 isolation layer around the SDK call.
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    SandboxRegistry                        │
-│  Map<"native" | "wasm" | "docker", ISandbox>             │
-└────────────────────────┬─────────────────────────────────┘
-                         │ registry.get(task.sandboxType)
-          ┌──────────────┼────────────────────┐
-          ▼              ▼                     ▼
-  ┌──────────────┐ ┌──────────────┐  ┌──────────────────┐
-  │NativeSandbox │ │ WasmSandbox  │  │  DockerSandbox   │
-  │              │ │              │  │  (stub;          │
-  │ direct SDK   │ │ Extism plugin│  │   isAvailable    │
-  │ query() call │ │ wraps SDK    │  │   returns false) │
-  └──────────────┘ └──────────────┘  └──────────────────┘
-          │              │                     │
-          └──────────────┴─────────────────────┘
-                         │ ISandbox.start() → SandboxInstance
-                         ▼
-             SandboxInstance.execute(params)
-                         │
-                         ▼
-               Claude Code SDK query()
-                         │
-                         ▼
-               AsyncIterable<SandboxEvent>
-```
+<p align="center">
+  <img src="assets/sandbox-architecture.png" alt="Sandbox Architecture" width="100%">
+</p>
 
 See [docs/sandbox-guide.md](sandbox-guide.md) for the full ISandbox interface
 and instructions for adding a new sandbox type.

@@ -9,6 +9,10 @@ execution cards.
 
 ## SSE Streaming Protocol
 
+<p align="center">
+  <img src="assets/chat-sse-flow.png" alt="Chat SSE Streaming Flow" width="100%">
+</p>
+
 `POST /api/chat` accepts a JSON body and returns `Content-Type: text/event-stream`.
 
 Each SSE event has:

@@ -101,6 +101,10 @@ Checkpoints are also written unconditionally on:
 
 ## Recovery Flow
 
+<p align="center">
+  <img src="assets/recovery-flow.png" alt="Recovery Flow" width="100%">
+</p>
+
 The recovery flow runs when the OrchestratorService detects a crashed or
 unresponsive execution.
 
