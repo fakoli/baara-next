@@ -20,6 +20,7 @@ import type {
 import type { TaskAssignment } from "@baara-next/core";
 import type { ExecuteResult } from "@baara-next/core";
 import type { RuntimeRegistry, SandboxRegistry } from "@baara-next/executor";
+import { homedir } from "node:os";
 import {
   TaskNotFoundError,
   ExecutionNotFoundError,
@@ -222,8 +223,7 @@ export class OrchestratorService implements IOrchestratorService {
 
     const dataDir =
       process.env["BAARA_DATA_DIR"] ??
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      (require("os") as { homedir: () => string }).homedir() + "/.baara";
+      homedir() + "/.baara";
 
     let instance: import("@baara-next/core").SandboxInstance | undefined;
     let result: ExecuteResult;
@@ -295,6 +295,11 @@ export class OrchestratorService implements IOrchestratorService {
     const execution = this.store.getExecution(executionId);
     if (!execution) throw new ExecutionNotFoundError(executionId);
 
+    const retryable = ["failed", "timed_out", "dead_lettered"];
+    if (!retryable.includes(execution.status)) {
+      throw new InvalidStateTransitionError(execution.status, "retry_scheduled", executionId);
+    }
+
     const task = this._requireTask(execution.taskId);
 
     const id = crypto.randomUUID();
@@ -339,6 +344,22 @@ export class OrchestratorService implements IOrchestratorService {
     if (!task) return;
 
     const now = new Date().toISOString();
+    const nextAttempt = execution.attempt + 1;
+
+    // If the next attempt would exceed maxRetries, dead-letter instead of
+    // creating an unbounded retry chain.
+    if (nextAttempt > task.maxRetries + 1) {
+      // running → failed → dead_lettered (state machine requires two hops)
+      this.store.updateExecutionStatus(executionId, "failed", {
+        error: "Max retries exceeded during crash recovery",
+        completedAt: now,
+      });
+      routeToDlq(this.store, this.store.getExecution(executionId)!);
+      console.log(
+        `[orchestrator] Execution ${executionId} reached maxRetries (${task.maxRetries}) — dead-lettered.`
+      );
+      return;
+    }
 
     // 1. Mark crashed execution as retry_scheduled.
     this.store.updateExecutionStatus(executionId, "retry_scheduled", {
@@ -353,7 +374,6 @@ export class OrchestratorService implements IOrchestratorService {
 
     // 3. Create new execution attempt.
     const newId = crypto.randomUUID();
-    const nextAttempt = execution.attempt + 1;
 
     this.store.createExecution(
       newId,

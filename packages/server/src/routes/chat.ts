@@ -116,12 +116,15 @@ export function chatRoutes(deps: ChatDeps): Hono {
       const agentToolCalls: Array<{ name: string; input: unknown; output: unknown | null }> = [];
 
       try {
+        const isDev = process.env["NODE_ENV"] === "development";
+        const permissionMode = isDev ? "bypassPermissions" : "default";
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const options: Record<string, unknown> = {
           systemPrompt,
           mcpServers: { baara: mcpServer },
-          permissionMode: "bypassPermissions",
-          allowDangerouslySkipPermissions: true,
+          permissionMode,
+          ...(isDev ? { allowDangerouslySkipPermissions: true } : {}),
           maxTurns: 20,
           maxBudgetUsd: 0.5,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

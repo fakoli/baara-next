@@ -30,8 +30,9 @@ export class LogWriter {
   /**
    * Append a log entry to the execution's JSONL file.
    * Creates the log directory on the first write if it doesn't exist.
+   * Synchronous — uses appendFileSync internally.
    */
-  async append(executionId: string, entry: LogEntry): Promise<void> {
+  append(executionId: string, entry: LogEntry): void {
     if (!existsSync(this.logsDir)) {
       mkdirSync(this.logsDir, { recursive: true });
     }
@@ -65,6 +66,9 @@ export interface ReadLogOptions {
 /**
  * Read JSONL log entries for an execution with optional filtering and pagination.
  *
+ * Streams the file line-by-line via Bun.file().stream() to avoid loading the
+ * entire file into memory for large log files.
+ *
  * Returns an empty array if the file does not exist (execution not started
  * or logs not yet written).
  */
@@ -77,16 +81,41 @@ export async function readLogEntries(
 
   if (!existsSync(path)) return [];
 
-  const text = await Bun.file(path).text();
-  const lines = text.trim().split("\n").filter(Boolean);
-
+  const stream = Bun.file(path).stream();
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
   let entries: LogEntry[] = [];
-  for (const line of lines) {
-    try {
-      entries.push(JSON.parse(line) as LogEntry);
-    } catch {
-      // Skip malformed lines silently.
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        // Process any remaining content in the buffer.
+        if (buffer.trim()) {
+          try {
+            entries.push(JSON.parse(buffer.trim()) as LogEntry);
+          } catch {
+            // Skip malformed trailing line.
+          }
+        }
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      // Keep the last (potentially incomplete) chunk in the buffer.
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          entries.push(JSON.parse(line) as LogEntry);
+        } catch {
+          // Skip malformed lines silently.
+        }
+      }
     }
+  } finally {
+    reader.releaseLock();
   }
 
   // Apply level filter.

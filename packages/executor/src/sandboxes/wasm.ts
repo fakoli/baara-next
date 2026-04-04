@@ -67,6 +67,10 @@ export class WasmSandbox implements ISandbox {
   }
 
   async start(config: SandboxStartConfig): Promise<SandboxInstance> {
+    console.warn(
+      "[WasmSandbox] Note: resource limits are advisory — Extism policy enforcement is not yet active. " +
+        "The agent runs in the host process with system-prompt-level constraint hints."
+    );
     const rawConfig = config.sandboxConfig as RawWasmConfig;
     return new WasmSandboxInstance(
       config.executionId,

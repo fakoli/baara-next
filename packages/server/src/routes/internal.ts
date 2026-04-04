@@ -72,7 +72,7 @@ export function internalRoutes(
       prompt: string;
       options?: string[];
     };
-    store.createInputRequest({
+    const inputReq = store.createInputRequest({
       executionId,
       prompt,
       options,
@@ -80,17 +80,23 @@ export function internalRoutes(
       timeoutMs: 300_000,
     });
     store.updateExecutionStatus(executionId, "waiting_for_input");
-    return c.json({ ok: true });
+    return c.json({ ok: true, inputRequestId: inputReq.id });
   });
 
   // POST /internal/input-poll — agent polls for a HITL response
   router.post("/input-poll", async (c) => {
-    const { executionId } = await c.req.json() as { executionId: string };
-    const req = store.getInputRequest(executionId);
-    if (req && req.status === "responded") {
-      return c.json({ response: req.response });
+    const { inputRequestId } = await c.req.json() as {
+      executionId: string;
+      inputRequestId: string;
+    };
+    const req = store.getInputRequestById(inputRequestId);
+    if (req?.status === "responded") {
+      return c.json({ status: "responded", response: req.response });
     }
-    return c.json(null);
+    if (req?.status === "timed_out") {
+      return c.json({ status: "timed_out" });
+    }
+    return c.json({ status: "pending" });
   });
 
   return router;

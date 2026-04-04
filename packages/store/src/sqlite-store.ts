@@ -423,7 +423,7 @@ export class SQLiteStore implements IStore {
     );
   }
 
-  private getInputRequestById(id: string): InputRequest | null {
+  getInputRequestById(id: string): InputRequest | null {
     const row = this.db
       .query("SELECT * FROM input_requests WHERE id = ?")
       .get(id);
@@ -435,33 +435,30 @@ export class SQLiteStore implements IStore {
   // -------------------------------------------------------------------------
 
   listQueues(): QueueInfo[] {
-    const queues = this.db
-      .query("SELECT * FROM queues")
-      .all() as Array<{ name: string; max_concurrency: number; created_at: string }>;
+    const rows = this.db
+      .query(
+        `SELECT q.name, q.max_concurrency, q.created_at,
+           COALESCE(SUM(CASE WHEN e.status = 'queued' THEN 1 ELSE 0 END), 0) AS depth,
+           COALESCE(SUM(CASE WHEN e.status IN ('assigned','running','waiting_for_input') THEN 1 ELSE 0 END), 0) AS active_count
+         FROM queues q
+         LEFT JOIN executions e ON e.queue_name = q.name
+         GROUP BY q.name`
+      )
+      .all() as Array<{
+        name: string;
+        max_concurrency: number;
+        created_at: string;
+        depth: number;
+        active_count: number;
+      }>;
 
-    return queues.map((q) => {
-      const depth = (
-        this.db
-          .query(
-            "SELECT COUNT(*) as count FROM executions WHERE queue_name = ? AND status = 'queued'"
-          )
-          .get(q.name) as { count: number }
-      ).count;
-      const active = (
-        this.db
-          .query(
-            "SELECT COUNT(*) as count FROM executions WHERE queue_name = ? AND status IN ('assigned', 'running')"
-          )
-          .get(q.name) as { count: number }
-      ).count;
-      return {
-        name: q.name,
-        depth,
-        activeCount: active,
-        maxConcurrency: q.max_concurrency,
-        createdAt: q.created_at,
-      };
-    });
+    return rows.map((q) => ({
+      name: q.name,
+      depth: q.depth,
+      activeCount: q.active_count,
+      maxConcurrency: q.max_concurrency,
+      createdAt: q.created_at,
+    }));
   }
 
   getQueueInfo(name: string): QueueInfo | null {

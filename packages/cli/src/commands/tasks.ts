@@ -414,10 +414,12 @@ export function registerTasksCommand(program: Command): void {
 
         if (opts.follow) {
           const interval = setInterval(() => void printEntries(), 1000);
-          process.on("SIGINT", () => {
+          const cleanup = () => {
             clearInterval(interval);
             process.exit(0);
-          });
+          };
+          process.on("SIGINT", cleanup);
+          process.on("SIGTERM", cleanup);
         }
       }
     );

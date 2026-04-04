@@ -55,7 +55,7 @@ const DEFAULTS = `
 - executionType: cloud_code (Claude Agent SDK)
 - executionMode: queued (respects concurrency limits)
 - priority: 2 (normal)
-- maxRetries: 3
+- maxRetries: 0
 - timeoutMs: 300000 (5 minutes)
 
 When a user asks you to "run" a task without specifying mode, prefer submit_task

@@ -59,10 +59,15 @@ function makeRateLimiter(maxRequests: number = RATE_LIMIT_MAX) {
   }, 60_000);
 
   function checkRateLimit(ip: string): boolean {
-    // Nuclear option: if the map somehow exceeds the size cap, clear it entirely
-    // to prevent OOM rather than accepting new entries silently.
+    // If the map exceeds the size cap, evict the oldest 10% of entries
+    // (Map preserves insertion order) rather than clearing everything at once.
     if (rateLimitMap.size >= RATE_LIMIT_MAP_MAX_SIZE) {
-      rateLimitMap.clear();
+      const deleteCount = Math.ceil(rateLimitMap.size * 0.1);
+      let i = 0;
+      for (const key of rateLimitMap.keys()) {
+        if (i++ >= deleteCount) break;
+        rateLimitMap.delete(key);
+      }
     }
     const now = Date.now();
     const entry = rateLimitMap.get(ip);
@@ -151,15 +156,18 @@ export function createApp(deps: AppDeps): CreateAppResult {
     await next();
   });
 
-  // API key auth on all /internal/* routes (if configured).
-  // Internal routes are used by production-mode agents via HttpTransport.
-  if (apiKey) {
-    app.use("/internal/*", async (c, next) => {
-      const provided = c.req.header("x-api-key");
-      if (provided !== apiKey) return c.json({ error: "Unauthorized" }, 401);
-      await next();
-    });
-  }
+  // API key auth on all /internal/* routes.
+  // When no API key is configured, /internal/* is disabled entirely (503) to
+  // prevent unauthenticated access to agent transport endpoints.
+  const internal = new Hono();
+  internal.use("*", async (c, next) => {
+    if (!apiKey) {
+      return c.json({ error: "BAARA_API_KEY not configured; /internal/* is disabled" }, 503);
+    }
+    const provided = c.req.header("x-api-key");
+    if (provided !== apiKey) return c.json({ error: "Unauthorized" }, 401);
+    await next();
+  });
 
   // Rate limiting on mutation endpoints.
   const rlMiddleware = rateLimitMiddleware();
@@ -196,13 +204,15 @@ export function createApp(deps: AppDeps): CreateAppResult {
   app.route("/mcp", createMcpHttpApp({ store: deps.store, orchestrator: deps.orchestrator, logsDir: deps.logsDir }));
 
   // Internal agent transport routes (used by production-mode HttpTransport).
-  app.route(
-    "/internal",
+  // Auth guard is applied on the `internal` sub-app above.
+  internal.route(
+    "/",
     internalRoutes(
       deps.orchestrator as Parameters<typeof internalRoutes>[0],
       deps.store
     )
   );
+  app.route("/internal", internal);
 
   // Global error handler — no internal details leaked to clients.
   app.onError((err, c) => {

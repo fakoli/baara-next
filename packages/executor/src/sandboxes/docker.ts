@@ -15,6 +15,9 @@ import type {
   SandboxConfig,
 } from "@baara-next/core";
 import { randomUUID } from "node:crypto";
+import { writeFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Docker config (defaults applied)
@@ -194,19 +197,24 @@ export class DockerSandboxInstance implements SandboxInstance {
       args.push("-v", mount);
     }
 
-    // Pass ANTHROPIC_API_KEY for agent tasks that need Claude API access.
+    // Pass ANTHROPIC_API_KEY via --env-file to avoid leaking it in process args.
+    let envFile: string | null = null;
     if (process.env.ANTHROPIC_API_KEY) {
-      args.push("-e", `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`);
+      envFile = join(tmpdir(), `baara-${randomUUID()}.env`);
+      writeFileSync(envFile, `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}\n`, { mode: 0o600 });
+      args.push("--env-file", envFile);
     }
 
-    // Inject any caller-supplied environment variables.
+    // Inject any caller-supplied environment variables via individual -e flags.
+    // These are not secret keys and do not need the env-file treatment.
     if (params.environment) {
       for (const [key, value] of Object.entries(params.environment)) {
         args.push("-e", `${key}=${value}`);
       }
     }
 
-    args.push(config.image, "sh", "-c", params.prompt);
+    // Pass the prompt via stdin instead of `sh -c` to avoid shell injection.
+    args.push("-i", config.image, "sh");
 
     // Set up timeout abort.
     let timedOut = false;
@@ -217,9 +225,16 @@ export class DockerSandboxInstance implements SandboxInstance {
 
     try {
       this.proc = Bun.spawn(args, {
+        stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
       });
+
+      // Write the prompt to stdin and close the stream.
+      // Bun.spawn with stdin:"pipe" returns a FileSink; cast from the union type.
+      const stdinSink = this.proc.stdin as import("bun").FileSink;
+      stdinSink.write(params.prompt + "\n");
+      stdinSink.end();
 
       const currentProc = this.proc;
 
@@ -326,6 +341,10 @@ export class DockerSandboxInstance implements SandboxInstance {
     } finally {
       this.proc = null;
       this.containerName = null;
+      // Clean up the env file containing secrets.
+      if (envFile) {
+        try { unlinkSync(envFile); } catch {}
+      }
     }
   }
 

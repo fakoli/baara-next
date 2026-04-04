@@ -19,14 +19,16 @@ Temporal is replay-based durability for deterministic code. BAARA Next is checkp
 
 ## Decisions Summary
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Execution engine | Single: Claude Code SDK always | Shell tasks become agent with Bash tool only |
-| Sandbox model | Pluggable, containerd-style | Native, Wasm, Docker (stub) as interchangeable targets |
-| Task schema | Discriminated `SandboxConfig` union | Strongly-typed per-sandbox settings |
-| Communication | Hybrid WebSocket + SQLite queue | WS for real-time streaming, SQLite for durable commands |
-| Durability | Conversation-level checkpointing | Resume with context injection, not deterministic replay |
-| Plugin registry | Static (hardcoded), designed for dynamic later | Clean `ISandbox` interface, `Map<string, ISandbox>` registry |
+
+| Decision         | Choice                                         | Rationale                                                    |
+| ---------------- | ---------------------------------------------- | ------------------------------------------------------------ |
+| Execution engine | Single: Claude Code SDK always                 | Shell tasks become agent with Bash tool only                 |
+| Sandbox model    | Pluggable, containerd-style                    | Native, Wasm, Docker (stub) as interchangeable targets       |
+| Task schema      | Discriminated `SandboxConfig` union            | Strongly-typed per-sandbox settings                          |
+| Communication    | Hybrid WebSocket + SQLite queue                | WS for real-time streaming, SQLite for durable commands      |
+| Durability       | Conversation-level checkpointing               | Resume with context injection, not deterministic replay      |
+| Plugin registry  | Static (hardcoded), designed for dynamic later | Clean `ISandbox` interface, `Map<string, ISandbox>` registry |
+
 
 ---
 
@@ -155,13 +157,15 @@ interface Task {
 
 ### Migration from Current Schema
 
-| Old | New | Mapping |
-|-----|-----|---------|
-| `executionType: "cloud_code"` | `sandboxType: "native"` | Direct |
-| `executionType: "shell"` | `sandboxType: "native"` + `agentConfig.allowedTools: ["Bash"]` | Shell becomes constrained agent |
-| `executionType: "wasm"` | `sandboxType: "wasm"` | Direct |
-| `executionType: "wasm_edge"` | `sandboxType: "wasm"` + `sandboxConfig.gpuEnabled: true` | Merged |
-| `agentConfig` (mixed blob) | Split into `sandboxConfig` + `agentConfig` | Separate concerns |
+
+| Old                           | New                                                            | Mapping                         |
+| ----------------------------- | -------------------------------------------------------------- | ------------------------------- |
+| `executionType: "cloud_code"` | `sandboxType: "native"`                                        | Direct                          |
+| `executionType: "shell"`      | `sandboxType: "native"` + `agentConfig.allowedTools: ["Bash"]` | Shell becomes constrained agent |
+| `executionType: "wasm"`       | `sandboxType: "wasm"`                                          | Direct                          |
+| `executionType: "wasm_edge"`  | `sandboxType: "wasm"` + `sandboxConfig.gpuEnabled: true`       | Merged                          |
+| `agentConfig` (mixed blob)    | Split into `sandboxConfig` + `agentConfig`                     | Separate concerns               |
+
 
 ### SandboxRegistry
 
@@ -177,6 +181,7 @@ class SandboxRegistry {
 ```
 
 Populated at startup with three hardcoded implementations:
+
 - `NativeSandbox` — no-op wrapper, runs agent in host process
 - `WasmSandbox` — Extism Wasm machine wrapper
 - `DockerSandbox` — stub (returns `isAvailable: false`)
@@ -190,12 +195,14 @@ Populated at startup with three hardcoded implementations:
 Each running execution gets two channels:
 
 **WebSocket (fast path):**
+
 - Real-time streaming: log lines, text deltas, tool invocations, progress
 - Feeds web UI chat window and JSONL log file simultaneously
 - Ephemeral — not persisted beyond the current connection
 - If socket drops, events buffer in SQLite queue until reconnection
 
 **SQLite queue (durable path):**
+
 - Inbound commands: HITL responses, pause/resume, additional prompts
 - Outbound checkpoints: conversation state snapshots
 - Survives crashes — sandbox reads pending commands on restart
@@ -220,16 +227,18 @@ CREATE INDEX idx_task_messages_execution
 
 ### Message Types
 
-| Direction | Type | Payload | Purpose |
-|-----------|------|---------|---------|
-| inbound | `command` | `{ prompt: "continue with..." }` | Additional instruction to running agent |
-| inbound | `hitl_response` | `{ response: "approved" }` | Human-in-the-loop answer |
-| inbound | `pause` | `{}` | Pause execution |
-| inbound | `resume` | `{}` | Resume execution |
-| outbound | `checkpoint` | `{ conversationHistory, turnCount, ... }` | Periodic state snapshot |
-| outbound | `log` | `{ level, message, timestamp }` | Structured log line |
-| outbound | `hitl_request` | `{ prompt, options }` | Agent needs human input |
-| outbound | `event` | `{ type, payload }` | Tool invocation, text delta, etc. |
+
+| Direction | Type            | Payload                                   | Purpose                                 |
+| --------- | --------------- | ----------------------------------------- | --------------------------------------- |
+| inbound   | `command`       | `{ prompt: "continue with..." }`          | Additional instruction to running agent |
+| inbound   | `hitl_response` | `{ response: "approved" }`                | Human-in-the-loop answer                |
+| inbound   | `pause`         | `{}`                                      | Pause execution                         |
+| inbound   | `resume`        | `{}`                                      | Resume execution                        |
+| outbound  | `checkpoint`    | `{ conversationHistory, turnCount, ... }` | Periodic state snapshot                 |
+| outbound  | `log`           | `{ level, message, timestamp }`           | Structured log line                     |
+| outbound  | `hitl_request`  | `{ prompt, options }`                     | Agent needs human input                 |
+| outbound  | `event`         | `{ type, payload }`                       | Tool invocation, text delta, etc.       |
+
 
 ### InboundCommand Type
 
@@ -318,19 +327,16 @@ interface ConversationMessage {
 ### Checkpoint Lifecycle
 
 1. **Periodic checkpointing** — Every N turns (configurable, default: 5), the sandbox writes a checkpoint to `task_messages` (type: `checkpoint`). Also triggered on HITL pause.
-
 2. **Crash detection** — Health monitor finds execution in `running` status with stale heartbeat (> 2 × heartbeatInterval). Triggers recovery.
-
 3. **Recovery flow:**
-   - Transition execution to `retry_scheduled`
-   - Load latest checkpoint from `task_messages`
-   - Create new execution attempt linked to same thread
-   - Start new sandbox instance
-   - Call `sandbox.execute()` with checkpoint context:
-     - Prior `conversationHistory` injected as message history
-     - System prompt prepended: "You were previously working on this task. Your last completed turn was [N]. Your last action was [X]. Continue from where you left off."
-     - Any pending inbound commands (HITL responses) delivered immediately
-
+  - Transition execution to `retry_scheduled`
+  - Load latest checkpoint from `task_messages`
+  - Create new execution attempt linked to same thread
+  - Start new sandbox instance
+  - Call `sandbox.execute()` with checkpoint context:
+    - Prior `conversationHistory` injected as message history
+    - System prompt prepended: "You were previously working on this task. Your last completed turn was [N]. Your last action was [X]. Continue from where you left off."
+    - Any pending inbound commands (HITL responses) delivered immediately
 4. **Clean completion** — Final checkpoint written. Execution marked `completed`. Messages retained per configured retention policy.
 
 ### What IS Recovered
@@ -391,6 +397,7 @@ class WasmSandbox implements ISandbox {
 ### Extism Integration Approach
 
 The `@extism/extism` TypeScript SDK provides:
+
 - `Plugin` class: loads and runs Wasm modules
 - `createPlugin(manifest, options)`: configures memory, WASI, host functions
 - Fuel metering for CPU limits
@@ -401,18 +408,16 @@ The Wasm sandbox uses Extism as the isolation boundary. The Claude Code SDK itse
 1. The **host process** runs the Claude Code SDK `query()` call
 2. All tool execution (Bash, Read, Write, etc.) is intercepted and routed through **Extism host functions** that enforce sandbox constraints
 3. The Wasm guest module acts as a **policy enforcement layer** — it decides whether each tool call is allowed based on sandbox config (network, filesystem, memory limits)
-
-2. **Host functions** exposed to the Wasm guest:
-   - `baara_send_event(event_json)` — sends SandboxEvent to the engine
-   - `baara_read_command()` — reads next inbound command (blocks or returns null)
-   - `baara_log(level, message)` — structured logging
-   - `baara_checkpoint(state_json)` — triggers a checkpoint
-
-3. **Resource constraints** applied via Extism:
-   - `maxMemoryMb` → Wasm memory limit
-   - `maxCpuPercent` → fuel metering (approximate CPU limiting)
-   - `networkEnabled` → WASI network capability toggle
-   - `ports` → port-level network filtering via host function mediation
+4. **Host functions** exposed to the Wasm guest:
+  - `baara_send_event(event_json)` — sends SandboxEvent to the engine
+  - `baara_read_command()` — reads next inbound command (blocks or returns null)
+  - `baara_log(level, message)` — structured logging
+  - `baara_checkpoint(state_json)` — triggers a checkpoint
+5. **Resource constraints** applied via Extism:
+  - `maxMemoryMb` → Wasm memory limit
+  - `maxCpuPercent` → fuel metering (approximate CPU limiting)
+  - `networkEnabled` → WASI network capability toggle
+  - `ports` → port-level network filtering via host function mediation
 
 ### NativeSandbox Implementation
 
@@ -482,6 +487,7 @@ interface LogEntry {
 ### Write Path
 
 The `MessageBus.appendLog()` method:
+
 1. Writes to `task_messages` table (durable)
 2. Appends to `~/.baara/logs/{executionId}.jsonl` (file)
 3. Emits via WebSocket to connected clients (real-time)
@@ -501,6 +507,7 @@ JSONL files for completed executions are retained for `event_retention_days` (co
 ## Package Changes
 
 ### Modified: `packages/core`
+
 - `types.ts` — Replace `ExecutionType` with `SandboxType`, add `SandboxConfig` union, split `AgentConfig`
 - `interfaces/executor.ts` — Replace `IRuntime` with `ISandbox` + `SandboxInstance` + `SandboxRegistry`
 - Add `interfaces/message-bus.ts` — `IMessageBus` interface
@@ -508,6 +515,7 @@ JSONL files for completed executions are retained for `event_retention_days` (co
 - Add `types/sandbox-events.ts` — `SandboxEvent`, `InboundCommand`
 
 ### Modified: `packages/executor`
+
 - Rename to conceptually be the "sandbox" package (or keep name, change internals)
 - Replace `RuntimeRegistry` with `SandboxRegistry`
 - Replace `CloudCodeRuntime` with `NativeSandbox`
@@ -517,25 +525,31 @@ JSONL files for completed executions are retained for `event_retention_days` (co
 - Add `message-bus.ts` — `MessageBus` implementation
 
 ### Modified: `packages/store`
+
 - `migrations.ts` — Migration 3: create `task_messages` table, rename `execution_type` → `sandbox_type`
 - `sqlite-store.ts` — Add message CRUD methods, update task schema
 
 ### Modified: `packages/orchestrator`
+
 - `orchestrator-service.ts` — Use `SandboxRegistry` instead of `RuntimeRegistry`
 - `health-monitor.ts` — Add recovery flow (checkpoint load + re-execute)
 
 ### Modified: `packages/server`
+
 - `routes/executions.ts` — Add `GET /api/executions/:id/logs` (JSONL read)
 - `ws.ts` — Wire SandboxEvent streaming to WebSocket broadcast
 
 ### Modified: `packages/cli`
+
 - `commands/start.ts` — Wire SandboxRegistry instead of RuntimeRegistry
 - Update MCP tools that reference executionType
 
 ### Modified: `packages/mcp`
+
 - Update `create_task` tool schema: `sandboxType` + `sandboxConfig` replaces `executionType`
 
 ### Modified: `packages/web`
+
 - Task creation form: sandbox type selector with per-type config fields
 - Execution detail: real-time log streaming via WebSocket
 
@@ -545,14 +559,16 @@ JSONL files for completed executions are retained for `event_retention_days` (co
 
 All sandbox configuration is available via:
 
-| Setting | Web UI | MCP Tool | CLI |
-|---------|--------|----------|-----|
-| Sandbox type | Task creation form dropdown | `create_task` sandboxType param | `--sandbox native\|wasm\|docker` |
-| Wasm memory limit | Config panel slider | `create_task` sandboxConfig.maxMemoryMb | `--wasm-memory 512` |
-| Wasm network | Config panel toggle | `create_task` sandboxConfig.networkEnabled | `--wasm-network true` |
-| Tool selection | Checkbox list | `create_task` agentConfig.allowedTools | `--tools "Bash,Read,Write"` |
-| Model | Dropdown | `create_task` agentConfig.model | `--model claude-sonnet-4` |
-| Budget | Input field | `create_task` agentConfig.budgetUsd | `--budget 2.00` |
+
+| Setting           | Web UI                      | MCP Tool                                   | CLI                            |
+| ----------------- | --------------------------- | ------------------------------------------ | ------------------------------ |
+| Sandbox type      | Task creation form dropdown | `create_task` sandboxType param            | `--sandbox native|wasm|docker` |
+| Wasm memory limit | Config panel slider         | `create_task` sandboxConfig.maxMemoryMb    | `--wasm-memory 512`            |
+| Wasm network      | Config panel toggle         | `create_task` sandboxConfig.networkEnabled | `--wasm-network true`          |
+| Tool selection    | Checkbox list               | `create_task` agentConfig.allowedTools     | `--tools "Bash,Read,Write"`    |
+| Model             | Dropdown                    | `create_task` agentConfig.model            | `--model claude-sonnet-4`      |
+| Budget            | Input field                 | `create_task` agentConfig.budgetUsd        | `--budget 2.00`                |
+
 
 ---
 
@@ -570,3 +586,4 @@ All sandbox configuration is available via:
 10. **Docker stub**: Create task with `sandboxType: "docker"` → verify clean error "Docker sandbox not available"
 11. **MCP tool update**: Call `create_task` with new `sandboxType` field → task created correctly
 12. **CLI parity**: `baara tasks create --sandbox wasm --wasm-memory 256` → task with correct config
+

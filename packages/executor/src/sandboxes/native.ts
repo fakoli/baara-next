@@ -69,6 +69,12 @@ export class NativeSandboxInstance implements SandboxInstance {
   // Command poll interval handle.
   private commandPollHandle: ReturnType<typeof setInterval> | null = null;
 
+  // Additional prompts queued by inbound "command" messages for the next SDK turn.
+  private _pendingPrompts: string[] = [];
+
+  // Pause flag — when true the execute loop delays before proceeding.
+  private _paused = false;
+
   constructor(
     executionId: string,
     agentConfig: Record<string, unknown>,
@@ -162,13 +168,28 @@ export class NativeSandboxInstance implements SandboxInstance {
       this.commandPollHandle = setInterval(() => {
         const pending = bus.readPendingCommands(executionId);
         const ids = pending.map((p) => p.id);
-        for (const { command } of pending) {
+        for (const cmd of pending) {
           this.pushEvent({
             type: "log",
             level: "info",
-            message: `[command] received: ${command.type}`,
+            message: `[command] received: ${cmd.command.type}`,
             timestamp: new Date().toISOString(),
           });
+          switch (cmd.command.type) {
+            case "command":
+              // Queue the additional prompt for the next SDK turn.
+              this._pendingPrompts.push(cmd.command.prompt);
+              break;
+            case "hitl_response":
+              // Handled by the HITL flow separately (via provideInput).
+              break;
+            case "pause":
+              this._paused = true;
+              break;
+            case "resume":
+              this._paused = false;
+              break;
+          }
         }
         if (ids.length > 0) {
           bus.acknowledgeCommands(ids);
@@ -228,6 +249,13 @@ export class NativeSandboxInstance implements SandboxInstance {
         prompt,
         options: options as Parameters<typeof query>[0]["options"],
       })) {
+        if (this.controller.signal.aborted) break;
+
+        // When paused, spin-wait (checking abort every 500ms) before processing
+        // the next SDK message.
+        while (this._paused && !this.controller.signal.aborted) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 500));
+        }
         if (this.controller.signal.aborted) break;
 
         // Accumulate text deltas.

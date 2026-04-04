@@ -212,6 +212,13 @@ export interface IStore {
   getInputRequest(executionId: string): InputRequest | null;
 
   /**
+   * Return an input request by its ID regardless of status, or null if not
+   * found.  Used by the HTTP transport poll loop to detect `responded` and
+   * `timed_out` states after the record is no longer `pending`.
+   */
+  getInputRequestById(id: string): InputRequest | null;
+
+  /**
    * Record the operator's response and mark the input request as `responded`.
    *
    * Throws `ExecutionNotFoundError` if no pending input request exists for
