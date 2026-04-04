@@ -3,6 +3,34 @@
 //
 // Commander.js program wiring all sub-command groups.
 
+// Load environment variables from ~/.env (contains ANTHROPIC_API_KEY, etc.)
+import { readFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
+
+try {
+  const envPath = join(homedir(), ".env");
+  const envContent = readFileSync(envPath, "utf-8");
+  for (const line of envContent.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let value = trimmed.slice(eqIdx + 1).trim();
+    // Strip surrounding quotes
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    // Only set if not already defined (don't override explicit env vars)
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+} catch {
+  // ~/.env not found — that's fine, use existing env vars
+}
+
 import { Command } from "commander";
 import { registerStartCommand } from "./commands/start.ts";
 import { registerTasksCommand } from "./commands/tasks.ts";

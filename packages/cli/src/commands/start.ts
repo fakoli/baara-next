@@ -142,6 +142,7 @@ export function registerStartCommand(program: Command): void {
         hostname: serverConfig.hostname,
         fetch: serverConfig.fetch,
         websocket: serverConfig.websocket,
+        idleTimeout: 120, // seconds — needed for long-running SDK calls and SSE streams
       });
 
       console.log(`\nBAARA Next running at http://${opts.hostname === "0.0.0.0" ? "localhost" : opts.hostname}:${port}`);

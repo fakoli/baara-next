@@ -80,11 +80,11 @@ export class AgentService implements IAgentService {
     const task = assignment.task;
 
     // --- Select runtime ---
-    const runtime = this.selectRuntime(task.executionType);
+    const runtime = this.selectRuntimeForTask(task);
     if (!runtime) {
       return {
         status: "failed",
-        error: `No runtime registered for executionType "${task.executionType}"`,
+        error: `No runtime registered for task "${task.name}" (sandbox: ${task.sandboxType ?? "unknown"})`,
         durationMs: 0,
       };
     }
@@ -150,9 +150,27 @@ export class AgentService implements IAgentService {
     return Array.from(seen);
   }
 
-  /** Return the runtime whose name matches the task's executionType. */
-  private selectRuntime(executionType: string): IRuntime | undefined {
-    return this.runtimes.get(executionType);
+  /**
+   * Select the appropriate runtime for a task.
+   *
+   * Fast path: if the task only has the Bash tool (or no tools), use ShellRuntime
+   * for direct execution without an LLM call. This handles simple "echo hello" tasks.
+   *
+   * Agent path: if the task has multiple tools or needs agent reasoning, use
+   * CloudCodeRuntime which calls the Claude Code SDK query().
+   */
+  private selectRuntimeForTask(task: { executionType: string; agentConfig: unknown }): IRuntime | undefined {
+    const agentConfig = (task.agentConfig ?? {}) as Record<string, unknown>;
+    const tools = (agentConfig.allowedTools ?? []) as string[];
+
+    // If only Bash tool (or empty tools list), use shell runtime for fast execution
+    const isSimpleShellTask = tools.length === 0 || (tools.length === 1 && tools[0] === "Bash");
+    if (isSimpleShellTask && this.runtimes.has("shell")) {
+      return this.runtimes.get("shell");
+    }
+
+    // Otherwise use the full agent SDK (cloud_code runtime)
+    return this.runtimes.get(task.executionType) ?? this.runtimes.get("cloud_code");
   }
 
   /** Main poll-execute-report loop.  Never throws; runs until `running` is false. */

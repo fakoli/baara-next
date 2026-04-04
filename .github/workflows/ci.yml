@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - name: Typecheck all packages
+        run: |
+          for pkg in core store orchestrator agent executor transport server mcp cli; do
+            echo "::group::$pkg"
+            npx tsc --noEmit -p packages/$pkg/tsconfig.json
+            echo "::endgroup::"
+          done
+
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    env:
+      BAARA_SHELL_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - name: Run smoke tests
+        run: bun test --max-concurrency=1 tests/smoke/
+        timeout-minutes: 5
+
+  web-build:
+    name: Web Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - name: Build web UI
+        run: cd packages/web && npx vite build
