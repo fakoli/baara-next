@@ -23,10 +23,13 @@ describe("createDefaultSandboxRegistry", () => {
     expect(await native.isAvailable()).toBe(true);
   });
 
-  it("docker sandbox is never available", async () => {
+  it("docker sandbox isAvailable() returns a boolean without throwing", async () => {
+    // Returns true when Docker is installed and the daemon is running,
+    // false otherwise. Both are valid — what matters is no exception is thrown.
     const registry = await createDefaultSandboxRegistry({ dataDir: "/tmp" });
     const docker = registry.get("docker")!;
-    expect(await docker.isAvailable()).toBe(false);
+    const available = await docker.isAvailable();
+    expect(typeof available).toBe("boolean");
   });
 
   it("getAvailable() always includes native", async () => {

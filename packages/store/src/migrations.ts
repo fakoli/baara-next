@@ -255,6 +255,25 @@ const MIGRATIONS: Migration[] = [
         ON task_messages(execution_id, direction, status, created_at);
     `,
   },
+  {
+    version: 4,
+    description: "Add thread_messages table for chat history replay",
+    up: `
+      -- thread_messages: stores user and agent turns for each chat thread so
+      -- that clicking an old thread in the sidebar replays the conversation.
+      CREATE TABLE IF NOT EXISTS thread_messages (
+        id           TEXT PRIMARY KEY,
+        thread_id    TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        role         TEXT NOT NULL CHECK (role IN ('user', 'agent')),
+        content      TEXT NOT NULL DEFAULT '',
+        tool_calls   TEXT NOT NULL DEFAULT '[]',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_thread_messages_thread
+        ON thread_messages(thread_id, created_at ASC);
+    `,
+  },
 ];
 
 // ---------------------------------------------------------------------------

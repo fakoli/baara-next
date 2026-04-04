@@ -25,6 +25,8 @@ import type {
   Thread,
   TaskMessage,
   SendMessageInput,
+  ThreadMessage,
+  AppendThreadMessageInput,
 } from "@baara-next/core";
 import {
   TaskNotFoundError,
@@ -692,6 +694,31 @@ export class SQLiteStore implements IStore {
   }
 
   // -------------------------------------------------------------------------
+  // Thread Messages — chat history for the thread sidebar replay
+  // -------------------------------------------------------------------------
+
+  appendThreadMessage(input: AppendThreadMessageInput): ThreadMessage {
+    this.db.run(
+      `INSERT INTO thread_messages (id, thread_id, role, content, tool_calls)
+       VALUES (?, ?, ?, ?, ?)`,
+      [input.id, input.threadId, input.role, input.content, input.toolCalls]
+    );
+    const row = this.db
+      .query("SELECT * FROM thread_messages WHERE id = ?")
+      .get(input.id);
+    return rowToThreadMessage(row as Record<string, unknown>);
+  }
+
+  listThreadMessages(threadId: string): ThreadMessage[] {
+    const rows = this.db
+      .query(
+        "SELECT * FROM thread_messages WHERE thread_id = ? ORDER BY created_at ASC"
+      )
+      .all(threadId as SQLQueryBindings) as Array<Record<string, unknown>>;
+    return rows.map(rowToThreadMessage);
+  }
+
+  // -------------------------------------------------------------------------
   // Task Messages
   // -------------------------------------------------------------------------
 
@@ -832,6 +859,17 @@ function rowToTaskMessage(r: Record<string, unknown>): TaskMessage {
     messageType: r["message_type"] as string,
     payload: r["payload"] as string,
     status: r["status"] as "pending" | "delivered" | "acknowledged",
+    createdAt: r["created_at"] as string,
+  };
+}
+
+function rowToThreadMessage(r: Record<string, unknown>): ThreadMessage {
+  return {
+    id: r["id"] as string,
+    threadId: r["thread_id"] as string,
+    role: r["role"] as "user" | "agent",
+    content: (r["content"] as string) ?? "",
+    toolCalls: (r["tool_calls"] as string) ?? "[]",
     createdAt: r["created_at"] as string,
   };
 }

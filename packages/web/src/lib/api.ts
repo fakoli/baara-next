@@ -10,6 +10,7 @@ import type {
   ExecutionStatus,
   Thread,
   SSEEvent,
+  ThreadMessage,
 } from '../types.ts';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -137,6 +138,10 @@ export function renameThread(id: string, title: string): Promise<Thread> {
     method: 'PUT',
     body: JSON.stringify({ title }),
   });
+}
+
+export function fetchThreadMessages(threadId: string): Promise<ThreadMessage[]> {
+  return request<ThreadMessage[]>(`/api/chat/sessions/${threadId}/messages`);
 }
 
 // ---------------------------------------------------------------------------

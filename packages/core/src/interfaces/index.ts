@@ -9,7 +9,7 @@ export type {
   RuntimeConfig,
   ResourceLimits,
 } from "./executor.ts";
-export type { IStore, TaskMessage, SendMessageInput } from "./store.ts";
+export type { IStore, TaskMessage, SendMessageInput, ThreadMessage, AppendThreadMessageInput } from "./store.ts";
 export type { ITransport } from "./transport.ts";
 export type {
   ISandbox,

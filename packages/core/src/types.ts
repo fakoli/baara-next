@@ -441,3 +441,35 @@ export interface SendMessageInput {
   messageType: string;
   payload: string;
 }
+
+// ---------------------------------------------------------------------------
+// ThreadMessage — a row in thread_messages (chat history)
+// ---------------------------------------------------------------------------
+
+/**
+ * A persisted chat turn stored in the thread_messages table.
+ * Written by the chat SSE route as messages stream in; replayed when the
+ * user clicks an old thread in the sidebar.
+ */
+export interface ThreadMessage {
+  id: string;
+  threadId: string;
+  role: "user" | "agent";
+  /** Accumulated text content of the message. */
+  content: string;
+  /** Serialised tool call array (JSON string). Empty array when no tools were used. */
+  toolCalls: string;
+  createdAt: string;
+}
+
+/**
+ * Input for inserting a new thread_messages row.
+ */
+export interface AppendThreadMessageInput {
+  id: string;
+  threadId: string;
+  role: "user" | "agent";
+  content: string;
+  /** Pre-serialised JSON string of the tool calls array. */
+  toolCalls: string;
+}

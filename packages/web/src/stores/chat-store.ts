@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ChatMessage, Thread } from '../types.ts';
-import { streamChat } from '../lib/api.ts';
+import { streamChat, fetchThreadMessages } from '../lib/api.ts';
 import { useThreadStore } from './thread-store.ts';
 
 interface ChatStore {
@@ -173,9 +173,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   loadThread: (thread) => {
-    // Loading a thread clears the current chat and sets the thread context.
-    // Message history replay is not yet implemented — the user sees an empty
-    // chat with prior context still embedded in the server-side session.
+    // Reset state immediately so the UI switches to this thread without a
+    // flicker, then asynchronously fetch and replay the message history.
     set({
       messages: [],
       threadId: thread.id,
@@ -185,6 +184,42 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       sessionCostUsd: 0,
       toolCallCount: 0,
     });
+
+    // Fetch persisted messages and reconstruct the ChatMessage array.
+    // Fire-and-forget; errors are surfaced via the error field.
+    void fetchThreadMessages(thread.id)
+      .then((rows) => {
+        const reconstructed: ChatMessage[] = rows.map((row) => {
+          let toolCalls: ChatMessage['toolCalls'] = [];
+          try {
+            const parsed: unknown = JSON.parse(row.toolCalls);
+            if (Array.isArray(parsed)) {
+              toolCalls = parsed as ChatMessage['toolCalls'];
+            }
+          } catch {
+            // malformed JSON — treat as no tool calls
+          }
+          return {
+            id: row.id,
+            role: row.role,
+            text: row.content,
+            toolCalls,
+            streaming: false,
+            createdAt: row.createdAt,
+          };
+        });
+
+        // Only apply if the user hasn't switched to a different thread while
+        // the fetch was in flight.
+        if (get().threadId === thread.id) {
+          set({ messages: reconstructed });
+        }
+      })
+      .catch((err: unknown) => {
+        if (get().threadId === thread.id) {
+          set({ error: err instanceof Error ? err.message : 'Failed to load history' });
+        }
+      });
   },
 
   clearChat: () => {

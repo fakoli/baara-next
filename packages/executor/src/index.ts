@@ -17,16 +17,15 @@ export type { SandboxExecuteParams as ExecutorSandboxExecuteParams } from "./rec
 export { SandboxRegistry } from "./sandbox-registry.ts";
 export { NativeSandbox, NativeSandboxInstance } from "./sandboxes/native.ts";
 export { WasmSandbox, WasmSandboxInstance } from "./sandboxes/wasm.ts";
-export { DockerSandbox } from "./sandboxes/docker.ts";
+export { DockerSandbox, DockerSandboxInstance } from "./sandboxes/docker.ts";
 export type { ResolvedWasmConfig } from "./sandboxes/wasm.ts";
+export type { ResolvedDockerConfig } from "./sandboxes/docker.ts";
 
 // Legacy runtime exports — kept during migration, to be removed in Phase 5 cleanup
 export { RuntimeRegistry } from "./runtime-registry.ts";
 export { defaultLimits, mergeLimits } from "./sandbox.ts";
 export { CloudCodeRuntime } from "./runtimes/cloud-code.ts";
 export { ShellRuntime } from "./runtimes/shell.ts";
-export { WasmRuntime } from "./runtimes/wasm.ts";
-export { WasmEdgeRuntime } from "./runtimes/wasmedge.ts";
 
 import { SandboxRegistry } from "./sandbox-registry.ts";
 import { NativeSandbox } from "./sandboxes/native.ts";
@@ -35,8 +34,6 @@ import { DockerSandbox } from "./sandboxes/docker.ts";
 import { RuntimeRegistry } from "./runtime-registry.ts";
 import { CloudCodeRuntime } from "./runtimes/cloud-code.ts";
 import { ShellRuntime } from "./runtimes/shell.ts";
-import { WasmRuntime } from "./runtimes/wasm.ts";
-import { WasmEdgeRuntime } from "./runtimes/wasmedge.ts";
 import type { RuntimeConfig } from "@baara-next/core";
 
 /**
@@ -45,7 +42,7 @@ import type { RuntimeConfig } from "@baara-next/core";
  *
  * - `native` is always available.
  * - `wasm` is available when `@extism/extism` is installed.
- * - `docker` always reports unavailable (stub).
+ * - `docker` is available when Docker is installed and the daemon is running.
  *
  * Accepts either a bare dataDir string (legacy call sites) or a config object.
  */
@@ -77,8 +74,6 @@ export async function createDefaultRegistry(
   const runtimes = [
     new CloudCodeRuntime(),
     new ShellRuntime(),
-    new WasmRuntime(),
-    new WasmEdgeRuntime(),
   ];
 
   await Promise.all(runtimes.map((r) => r.initialize(config)));

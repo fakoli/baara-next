@@ -160,6 +160,20 @@ export interface Thread {
   updatedAt: string;
 }
 
+/**
+ * A persisted chat turn from the thread_messages table.
+ * Returned by GET /api/chat/sessions/:id/messages for history replay.
+ */
+export interface ThreadMessage {
+  id: string;
+  threadId: string;
+  role: 'user' | 'agent';
+  content: string;
+  /** JSON-serialised array of tool calls */
+  toolCalls: string;
+  createdAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Chat / SSE
 // ---------------------------------------------------------------------------

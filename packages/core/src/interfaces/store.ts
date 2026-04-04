@@ -10,6 +10,7 @@
 // signal that callers must not rely on a returned value for mutations.
 
 import type {
+  AppendThreadMessageInput,
   CreateProjectInput,
   CreateTaskInput,
   CreateTemplateInput,
@@ -24,12 +25,13 @@ import type {
   TaskMessage,
   Template,
   Thread,
+  ThreadMessage,
   UpdateTaskInput,
 } from "../types.ts";
 import type { ExecutionEvent } from "../events.ts";
 
 // Re-export so interfaces/index.ts can surface these alongside IStore.
-export type { TaskMessage, SendMessageInput } from "../types.ts";
+export type { TaskMessage, SendMessageInput, ThreadMessage, AppendThreadMessageInput } from "../types.ts";
 
 export interface IStore {
   // -------------------------------------------------------------------------
@@ -329,6 +331,22 @@ export interface IStore {
    * @param opts.limit - Maximum number of rows to return (default: no limit).
    */
   listExecutionsByThread(threadId: string, opts?: { limit?: number }): Execution[];
+
+  /**
+   * Append a chat turn to the thread_messages table.
+   *
+   * Call this from the chat SSE route: once for the user message when the
+   * request arrives, and once for the completed agent message after the
+   * `result` event fires.
+   */
+  appendThreadMessage(input: AppendThreadMessageInput): ThreadMessage;
+
+  /**
+   * Return all chat turns for a thread, oldest first (chronological order).
+   *
+   * Used by `GET /api/threads/:id/messages` to replay conversation history.
+   */
+  listThreadMessages(threadId: string): ThreadMessage[];
 
   // -------------------------------------------------------------------------
   // Task Messages — durable command queue and checkpoint store

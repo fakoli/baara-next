@@ -127,9 +127,11 @@ export class DevTransport implements ITransport {
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingInputs.delete(executionId);
-        // The transport does not have access to the InputRequest ID at this
-        // point; pass "unknown" as a placeholder for the inputRequestId arg.
-        reject(new InputTimeoutError("unknown", executionId, timeoutMs));
+        // The orchestrator creates the InputRequest as a side-effect of
+        // orch.requestInput(), but its ID is not returned through the void
+        // interface. Use a deterministic prefix so the error message is
+        // identifiable without being a silent "unknown".
+        reject(new InputTimeoutError(`exec:${executionId}`, executionId, timeoutMs));
       }, timeoutMs);
       this.pendingInputs.set(executionId, {
         resolve: (r: string) => { clearTimeout(timer); resolve(r); },

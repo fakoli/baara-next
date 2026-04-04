@@ -80,6 +80,16 @@ export function chatRoutes(deps: ChatDeps): Hono {
     // Resolve or generate a session ID
     const resolvedSessionId = sessionId ?? crypto.randomUUID();
 
+    // Persist the user message before streaming starts so it is always
+    // recorded even if the client disconnects mid-stream.
+    deps.store.appendThreadMessage({
+      id: crypto.randomUUID(),
+      threadId: threadId,
+      role: "user",
+      content: message.trim(),
+      toolCalls: "[]",
+    });
+
     return streamSSE(c, async (stream) => {
       let eventId = 0;
 
@@ -100,6 +110,10 @@ export function chatRoutes(deps: ChatDeps): Hono {
           toolCount: 27,
         }),
       });
+
+      // Accumulators for persisting the agent response after streaming.
+      let agentText = "";
+      const agentToolCalls: Array<{ name: string; input: unknown; output: unknown | null }> = [];
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -157,6 +171,7 @@ export function chatRoutes(deps: ChatDeps): Hono {
                   data: JSON.stringify({ type: "text", content: block.text }),
                 });
               } else if (block.type === "tool_use" || block.type === "mcp_tool_use") {
+                agentToolCalls.push({ name: block.name ?? "", input: block.input ?? {}, output: null });
                 await stream.writeSSE({
                   event: "message",
                   id: String(eventId++),
@@ -167,6 +182,13 @@ export function chatRoutes(deps: ChatDeps): Hono {
                   }),
                 });
               } else if (block.type === "mcp_tool_result") {
+                // Fill output for the most recent tool call with this name.
+                for (let i = agentToolCalls.length - 1; i >= 0; i--) {
+                  if (agentToolCalls[i]!.name === block.name && agentToolCalls[i]!.output === null) {
+                    agentToolCalls[i] = { ...agentToolCalls[i]!, output: block.content };
+                    break;
+                  }
+                }
                 await stream.writeSSE({
                   event: "message",
                   id: String(eventId++),
@@ -186,6 +208,7 @@ export function chatRoutes(deps: ChatDeps): Hono {
           if (msg.type === "stream_event") {
             const event = (msg as { event: { type: string; delta?: { type: string; text?: string } } }).event;
             if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+              agentText += event.delta.text ?? "";
               await stream.writeSSE({
                 event: "message",
                 id: String(eventId++),
@@ -209,6 +232,26 @@ export function chatRoutes(deps: ChatDeps): Hono {
               total_cost_usd: number;
               duration_ms: number;
             };
+
+            // Persist the completed agent message for history replay.
+            // Use result.result as the canonical text when available (it is the
+            // full response text); fall back to the accumulated delta text.
+            const finalText = resultMsg.result ?? agentText;
+            if (finalText || agentToolCalls.length > 0) {
+              try {
+                deps.store.appendThreadMessage({
+                  id: crypto.randomUUID(),
+                  threadId: threadId,
+                  role: "agent",
+                  content: finalText,
+                  toolCalls: JSON.stringify(agentToolCalls),
+                });
+              } catch (persistErr) {
+                // Non-fatal: log but don't break the stream response.
+                console.error("[chat] failed to persist agent message", persistErr);
+              }
+            }
+
             await stream.writeSSE({
               event: "message",
               id: String(eventId++),
@@ -220,7 +263,7 @@ export function chatRoutes(deps: ChatDeps): Hono {
                   inputTokens: resultMsg.usage.input_tokens,
                   outputTokens: resultMsg.usage.output_tokens,
                 },
-                costUsd: resultMsg.total_cost_usd,
+                cost: resultMsg.total_cost_usd,
                 durationMs: resultMsg.duration_ms,
               }),
             });
@@ -265,6 +308,23 @@ export function chatRoutes(deps: ChatDeps): Hono {
       return c.json({ error: "Session not found" }, 404);
     }
     return c.json(thread);
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/chat/sessions/:id/messages — chat history for a thread
+  //
+  // Returns all persisted chat turns (user + agent) in chronological order.
+  // The web client calls this when the user selects an existing thread in the
+  // sidebar so it can replay the conversation.
+  // -------------------------------------------------------------------------
+  router.get("/sessions/:id/messages", (c) => {
+    const id = c.req.param("id");
+    const thread = deps.store.getThread(id);
+    if (!thread) {
+      return c.json({ error: "Session not found" }, 404);
+    }
+    const messages = deps.store.listThreadMessages(id);
+    return c.json(messages);
   });
 
   // -------------------------------------------------------------------------

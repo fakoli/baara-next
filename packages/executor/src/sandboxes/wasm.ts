@@ -59,8 +59,6 @@ export class WasmSandbox implements ISandbox {
 
   async isAvailable(): Promise<boolean> {
     try {
-      // @ts-expect-error — @extism/extism is an optional peer dependency not
-      // installed at typecheck time; the dynamic import is safe at runtime.
       await import("@extism/extism");
       return true;
     } catch {
@@ -158,7 +156,6 @@ export class WasmSandboxInstance implements SandboxInstance {
   private async _executeWithExtismPolicy(
     params: SandboxExecuteParams
   ): Promise<SandboxExecuteResult> {
-    // @ts-expect-error — optional peer dependency, types not available at build time
     const { createPlugin } = await import("@extism/extism");
     const config = this.resolvedConfig;
 
@@ -179,63 +176,31 @@ export class WasmSandboxInstance implements SandboxInstance {
         allowedHosts: config.networkEnabled ? ["*"] : [],
         // pages are 64 KiB; convert MB ceiling to pages (ceil(MB / 0.064))
         memory: { maxPages: Math.ceil(config.maxMemoryMb / 0.064) },
-        functions: [
-          // Host function: called by the guest to emit a SandboxEvent.
-          {
-            namespace: "baara",
-            name: "send_event",
-            callback(_cp: unknown, _off: number, _len: number): void {
-              // In a full implementation: decode the event JSON and push to
-              // the inner instance's event stream. Currently a no-op because
-              // NativeSandboxInstance manages its own event queue.
+        // Extism v2 host functions: Record<namespace, Record<name, handler>>
+        functions: {
+          baara: {
+            // Emit a SandboxEvent from the guest. No-op — NativeSandboxInstance
+            // manages its own event queue; this is the hook point for future
+            // pure-Wasm guest implementations.
+            send_event(_cp: any, _off: bigint, _len: bigint): void {},
+
+            // Read the next inbound command. Returns 0 = no command available.
+            read_command(_cp: any): bigint { return 0n; },
+
+            // Structured log entry from guest.
+            log(_cp: any, _levelOff: bigint, _levelLen: bigint, _msgOff: bigint, _msgLen: bigint): void {},
+
+            // Trigger an explicit checkpoint from guest.
+            checkpoint(_cp: any, _off: bigint, _len: bigint): void {},
+
+            // Network policy check — returns 1n if allowed, 0n if denied.
+            check_network(_cp: any, _hostOff: bigint, _hostLen: bigint, _port: bigint): bigint {
+              if (!config.networkEnabled) return 0n;
+              if (config.ports.length === 0) return 1n;
+              return config.ports.includes(Number(_port)) ? 1n : 0n;
             },
           },
-          // Host function: called by the guest to read the next inbound command.
-          {
-            namespace: "baara",
-            name: "read_command",
-            callback(_cp: unknown): number {
-              return 0; // 0 = no command available
-            },
-          },
-          // Host function: structured log entry from guest.
-          {
-            namespace: "baara",
-            name: "log",
-            callback(
-              _cp: unknown,
-              _levelOff: number,
-              _levelLen: number,
-              _msgOff: number,
-              _msgLen: number
-            ): void {
-              // Forwarded to inner NativeSandboxInstance event queue in a full impl.
-            },
-          },
-          // Host function: trigger an explicit checkpoint from guest.
-          {
-            namespace: "baara",
-            name: "checkpoint",
-            callback(_cp: unknown, _off: number, _len: number): void {
-              // In a full implementation: parse checkpoint JSON and write to MessageBus.
-            },
-          },
-          // Host function: network policy check — returns 1 if allowed, 0 if denied.
-          {
-            namespace: "baara",
-            name: "check_network",
-            callback(
-              _cp: unknown,
-              _hostOff: number,
-              _hostLen: number,
-              _port: number
-            ): number {
-              if (!config.networkEnabled) return 0;
-              if (config.ports.length === 0) return 1; // all ports permitted
-              return 1; // port-specific check is a TODO for full implementation
-            },
-          },
-        ],
+        },
       });
 
       // Run the agent via NativeSandboxInstance. The Extism plugin is available
@@ -284,7 +249,6 @@ export class WasmSandboxInstance implements SandboxInstance {
 
   private async _checkExtism(): Promise<boolean> {
     try {
-      // @ts-expect-error — optional peer dependency
       await import("@extism/extism");
       return true;
     } catch {

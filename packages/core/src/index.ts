@@ -37,6 +37,9 @@ export type {
   // Phase 5: Communication layer
   TaskMessage,
   SendMessageInput,
+  // Chat history
+  ThreadMessage,
+  AppendThreadMessageInput,
 } from "./types.ts";
 
 // --- Events ---
