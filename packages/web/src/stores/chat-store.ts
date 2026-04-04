@@ -79,6 +79,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             break;
           }
 
+          case 'text': {
+            // Full text message from the agent
+            set((s) => ({
+              messages: s.messages.map((m) =>
+                m.id === agentMsg.id ? { ...m, text: event.content } : m
+              ),
+            }));
+            break;
+          }
+
           case 'text_delta': {
             set((s) => ({
               messages: s.messages.map((m) =>

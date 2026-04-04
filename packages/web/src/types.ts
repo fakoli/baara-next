@@ -180,6 +180,7 @@ export interface ThreadMessage {
 
 export type SSEEventType =
   | 'system'
+  | 'text'
   | 'text_delta'
   | 'tool_use'
   | 'tool_result'
@@ -192,6 +193,11 @@ export interface SSESystemEvent {
   sessionId: string;
   threadId: string | null;
   toolCount: number;
+}
+
+export interface SSETextEvent {
+  type: 'text';
+  content: string;
 }
 
 export interface SSETextDeltaEvent {
@@ -228,6 +234,7 @@ export interface SSEDoneEvent {
 
 export type SSEEvent =
   | SSESystemEvent
+  | SSETextEvent
   | SSETextDeltaEvent
   | SSEToolUseEvent
   | SSEToolResultEvent
