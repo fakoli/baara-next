@@ -53,7 +53,7 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
     task.agentConfig?.budgetUsd != null ? String(task.agentConfig.budgetUsd) : ''
   );
   const [systemPrompt, setSystemPrompt] = useState(
-    (task.agentConfig as (typeof task.agentConfig & { systemPrompt?: string }) | null)?.systemPrompt ?? ''
+    task.agentConfig?.systemPrompt ?? ''
   );
 
   const [saving, setSaving] = useState(false);
@@ -63,6 +63,16 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
     setSaving(true);
     setSaveError(null);
     try {
+      // Validate budgetUsd before saving (#10)
+      if (budgetUsd.trim()) {
+        const parsedBudget = Number(budgetUsd);
+        if (isNaN(parsedBudget) || parsedBudget < 0) {
+          setSaveError('Budget (USD) must be a non-negative number');
+          setSaving(false);
+          return;
+        }
+      }
+
       const agentConfig = {
         ...(task.agentConfig ?? {}),
         ...(model.trim() ? { model: model.trim() } : {}),

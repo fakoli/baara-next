@@ -31,6 +31,8 @@ export interface AgentConfig {
   maxTurns?: number;
   budgetUsd?: number;
   mcpServers?: Record<string, McpServerConfig>;
+  /** Custom instructions injected into the agent's system prompt */
+  systemPrompt?: string;
 }
 
 export interface Task {

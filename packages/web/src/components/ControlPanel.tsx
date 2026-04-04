@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTaskStore } from '../stores/task-store.ts';
 import { useExecutionStore } from '../stores/execution-store.ts';
 import { useQueueStore } from '../stores/queue-store.ts';
@@ -353,11 +353,15 @@ function QueueItem({
   const [maxConcurrency, setMaxConcurrency] = useState(queue.maxConcurrency);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const prevMaxConcurrencyRef = useRef(queue.maxConcurrency);
 
-  // Sync local value when the queue data refreshes
-  if (!expanded && maxConcurrency !== queue.maxConcurrency) {
-    setMaxConcurrency(queue.maxConcurrency);
-  }
+  // Sync local value when the queue data refreshes (moved out of render path #9)
+  useEffect(() => {
+    if (!expanded && prevMaxConcurrencyRef.current !== queue.maxConcurrency) {
+      prevMaxConcurrencyRef.current = queue.maxConcurrency;
+      setMaxConcurrency(queue.maxConcurrency);
+    }
+  }, [expanded, queue.maxConcurrency]);
 
   async function handleSave() {
     setSaving(true);

@@ -51,7 +51,7 @@ const PERMISSION_MODE_CONFIG: Record<
 };
 
 export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
-  const { streaming, sessionCostUsd, sendMessage, permissionMode, setPermissionMode, systemInstructions, setSystemInstructions } = useChatStore();
+  const { streaming, sessionCostUsd, sendMessage, permissionMode, setPermissionMode, model, setModel, systemInstructions, setSystemInstructions } = useChatStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [sysInstrOpen, setSysInstrOpen] = useState(false);
   const [draftInstructions, setDraftInstructions] = useState(systemInstructions);
@@ -262,8 +262,8 @@ export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
           <span>·</span>
           {/* Model selector */}
           <select
-            value={useChatStore.getState().model ?? 'claude-sonnet-4-20250514'}
-            onChange={(e) => useChatStore.getState().setModel(e.target.value)}
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
             style={{
               background: 'var(--bg-active)',
               border: '1px solid var(--border)',

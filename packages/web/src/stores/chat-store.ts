@@ -316,7 +316,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     // Fire-and-forget; the server resolves the waiting Promise
-    void respondToPermission(requestId, decision).catch((err: unknown) => {
+    const currentSessionId = get().sessionId ?? '';
+    void respondToPermission(requestId, decision, currentSessionId).catch((err: unknown) => {
       console.error('[chat] respondToPermission failed', err);
     });
   },

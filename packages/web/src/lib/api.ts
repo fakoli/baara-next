@@ -167,11 +167,12 @@ export type PermissionDecision = 'allow' | 'allow_task' | 'deny';
 
 export function respondToPermission(
   requestId: string,
-  decision: PermissionDecision
+  decision: PermissionDecision,
+  sessionId: string
 ): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>('/api/chat/permission', {
     method: 'POST',
-    body: JSON.stringify({ requestId, decision }),
+    body: JSON.stringify({ requestId, decision, sessionId }),
   });
 }
 

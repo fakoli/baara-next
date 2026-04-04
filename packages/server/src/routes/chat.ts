@@ -36,11 +36,12 @@ type PermissionMode = "auto" | "ask" | "locked";
 // ---------------------------------------------------------------------------
 
 /**
- * Maps requestId → resolver function.
+ * Maps requestId → { resolve, sessionId }.
  * When the client calls POST /api/chat/permission, the resolver is invoked
  * with the decision string, unblocking the paused tool handler.
+ * sessionId is verified against the POST body to prevent cross-session spoofing.
  */
-const pendingPermissions = new Map<string, (decision: string) => void>();
+const pendingPermissions = new Map<string, { resolve: (decision: string) => void; sessionId: string }>();
 
 // ---------------------------------------------------------------------------
 // Request types
@@ -74,16 +75,13 @@ interface ChatRequest {
  * immediately without user interaction.
  */
 function createPermissionAwareMcpServer(
-  deps: ChatDeps,
   permissionMode: PermissionMode,
   approvedTools: Set<string>,
-  sendPermissionRequest: (requestId: string, toolName: string, toolInput: Record<string, unknown>) => Promise<void>
+  sessionId: string,
+  abortController: AbortController,
+  sendPermissionRequest: (requestId: string, toolName: string, toolInput: Record<string, unknown>) => Promise<void>,
+  baseTools: McpTool[]
 ) {
-  const baseTools = createAllTools({
-    store: deps.store,
-    orchestrator: deps.orchestrator,
-  });
-
   if (permissionMode === "auto") {
     return createSdkMcpServer({ name: "baara-next", tools: baseTools });
   }
@@ -123,13 +121,34 @@ function createPermissionAwareMcpServer(
         const requestId = crypto.randomUUID();
         const toolInput = args as Record<string, unknown>;
 
-        // Send the SSE event and wait for the user's decision
-        const decision = await new Promise<string>((resolve) => {
-          pendingPermissions.set(requestId, resolve);
-          // Fire-and-forget the SSE emission (it's async but we don't await here
-          // to avoid a promise ordering issue — the Map entry is set first)
-          void sendPermissionRequest(requestId, toolName, toolInput);
-        });
+        // Send the SSE event and wait for the user's decision.
+        // Register an abort listener to clean up the Map entry if the client
+        // disconnects while the permission is pending (#1).
+        let decision: string;
+        try {
+          decision = await new Promise<string>((resolve, reject) => {
+            pendingPermissions.set(requestId, { resolve, sessionId });
+            // Fire-and-forget the SSE emission (it's async but we don't await here
+            // to avoid a promise ordering issue — the Map entry is set first)
+            void sendPermissionRequest(requestId, toolName, toolInput);
+            abortController.signal.addEventListener("abort", () => {
+              if (pendingPermissions.delete(requestId)) {
+                reject(new Error("Client disconnected"));
+              }
+            }, { once: true });
+          });
+        } catch {
+          // Client disconnected — treat as a deny so the tool is not executed
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Tool "${toolName}" permission cancelled: client disconnected.`,
+              },
+            ],
+            isError: true,
+          };
+        }
 
         if (decision === "deny") {
           return {
@@ -176,10 +195,24 @@ export function chatRoutes(deps: ChatDeps): Hono {
       return c.json({ error: "Invalid JSON body" }, 400);
     }
 
-    const { message, sessionId, activeProjectId, permissionMode = "auto", model, systemInstructions } = body;
+    const { message, sessionId, activeProjectId, model, systemInstructions } = body;
     let { threadId } = body;
     if (!message || typeof message !== "string" || message.trim() === "") {
       return c.json({ error: "message is required" }, 400);
+    }
+
+    // Validate permissionMode — reject unknown values outright (#4)
+    const validModes: PermissionMode[] = ["auto", "ask", "locked"];
+    const rawMode = body.permissionMode;
+    if (rawMode !== undefined && !validModes.includes(rawMode as PermissionMode)) {
+      return c.json({ error: "permissionMode must be auto | ask | locked" }, 400);
+    }
+    const permissionMode: PermissionMode = (rawMode as PermissionMode | undefined) ?? "auto";
+
+    // Validate systemInstructions length (#3)
+    const MAX_SYSTEM_INSTRUCTIONS = 4000;
+    if (systemInstructions && systemInstructions.length > MAX_SYSTEM_INSTRUCTIONS) {
+      return c.json({ error: "systemInstructions too long" }, 400);
     }
 
     // Create a new thread when none is provided so every conversation is
@@ -193,13 +226,17 @@ export function chatRoutes(deps: ChatDeps): Hono {
     // Build context and system prompt synchronously before streaming starts
     const ctx = gatherChatContext(deps.store, { threadId, activeProjectId });
     const basePrompt = buildSystemPrompt(ctx);
-    // Prepend custom user instructions when provided
-    const systemPrompt = systemInstructions && systemInstructions.trim()
-      ? `${systemInstructions.trim()}\n\n---\n\n${basePrompt}`
+    // Prepend custom user instructions when provided, wrapped in XML tags (#3)
+    const systemPrompt = systemInstructions?.trim()
+      ? `<user_instructions>\n${systemInstructions.trim()}\n</user_instructions>\n\n${basePrompt}`
       : basePrompt;
 
     // Resolve or generate a session ID
     const resolvedSessionId = sessionId ?? crypto.randomUUID();
+
+    // Compute the actual tool count so the handshake event is accurate (#6)
+    const allTools = createAllTools({ store: deps.store, orchestrator: deps.orchestrator });
+    const toolCount = allTools.length;
 
     // Persist the user message before streaming starts so it is always
     // recorded even if the client disconnects mid-stream.
@@ -228,7 +265,7 @@ export function chatRoutes(deps: ChatDeps): Hono {
           type: "system",
           sessionId: resolvedSessionId,
           threadId: threadId,
-          toolCount: 27,
+          toolCount,
         }),
       });
 
@@ -261,10 +298,12 @@ export function chatRoutes(deps: ChatDeps): Hono {
         // Build the MCP server — permission-aware when mode is ask/locked,
         // plain bypass when auto.
         const mcpServer = createPermissionAwareMcpServer(
-          deps,
           permissionMode,
           approvedTools,
-          sendPermissionRequest
+          resolvedSessionId,
+          abortController,
+          sendPermissionRequest,
+          allTools
         );
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -307,7 +346,7 @@ export function chatRoutes(deps: ChatDeps): Hono {
                   type: "system",
                   sessionId: sdkSessionId,
                   threadId: threadId,
-                  toolCount: 27,
+                  toolCount,
                 }),
               });
             }
@@ -447,28 +486,35 @@ export function chatRoutes(deps: ChatDeps): Hono {
   // -------------------------------------------------------------------------
   // POST /api/chat/permission — resolve a pending tool permission request
   //
-  // Body: { requestId: string; decision: "allow" | "allow_task" | "deny" }
+  // Body: { requestId: string; sessionId: string; decision: "allow" | "allow_task" | "deny" }
   // -------------------------------------------------------------------------
   router.post("/permission", async (c) => {
-    let body: { requestId?: string; decision?: string };
+    let body: { requestId?: string; sessionId?: string; decision?: string };
     try {
-      body = await c.req.json<{ requestId: string; decision: string }>();
+      body = await c.req.json<{ requestId: string; sessionId: string; decision: string }>();
     } catch {
       return c.json({ error: "Invalid JSON body" }, 400);
     }
-    const { requestId, decision } = body;
+    const { requestId, sessionId: bodySessionId, decision } = body;
     if (!requestId || typeof requestId !== "string") {
       return c.json({ error: "requestId is required" }, 400);
+    }
+    if (!bodySessionId || typeof bodySessionId !== "string") {
+      return c.json({ error: "sessionId is required" }, 400);
     }
     if (!decision || !["allow", "allow_task", "deny"].includes(decision)) {
       return c.json({ error: "decision must be allow | allow_task | deny" }, 400);
     }
-    const resolve = pendingPermissions.get(requestId);
-    if (!resolve) {
+    const entry = pendingPermissions.get(requestId);
+    if (!entry) {
       return c.json({ error: "No pending permission request found for that requestId" }, 404);
     }
+    // Verify the request belongs to the calling session (#2)
+    if (entry.sessionId !== bodySessionId) {
+      return c.json({ error: "sessionId does not match the pending request" }, 403);
+    }
     pendingPermissions.delete(requestId);
-    resolve(decision);
+    entry.resolve(decision);
     return c.json({ ok: true });
   });
 

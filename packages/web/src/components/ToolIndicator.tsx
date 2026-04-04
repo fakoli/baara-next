@@ -6,13 +6,23 @@ interface ToolIndicatorProps {
   detail?: string;
   /** Whether this tool is still running (shows spinner) vs completed */
   completed?: boolean;
+  /**
+   * When provided, match the pending permission by requestId rather than tool
+   * name to avoid false matches when the same tool appears multiple times (#7).
+   */
+  requestId?: string;
 }
 
-export default function ToolIndicator({ name, detail, completed = false }: ToolIndicatorProps) {
+export default function ToolIndicator({ name, detail, completed = false, requestId }: ToolIndicatorProps) {
   const { pendingPermission, respondToPermission } = useChatStore();
 
-  // Check whether THIS tool indicator is the one awaiting approval
-  const isPending = pendingPermission !== null && pendingPermission.toolName === name;
+  // Check whether THIS tool indicator is the one awaiting approval.
+  // Prefer matching by requestId when available; fall back to tool name.
+  const isPending = pendingPermission !== null && (
+    requestId !== undefined
+      ? pendingPermission.requestId === requestId
+      : pendingPermission.toolName === name
+  );
 
   if (isPending && pendingPermission) {
     return (

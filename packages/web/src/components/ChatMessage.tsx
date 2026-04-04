@@ -9,7 +9,7 @@ interface ChatMessageProps {
 }
 
 export default function ChatMessage({ message }: ChatMessageProps) {
-  const { sendMessage } = useChatStore();
+  const { sendMessage, pendingPermission } = useChatStore();
   const isUser = message.role === 'user';
 
   function handleCardAction(action: string, id: string) {
@@ -110,14 +110,23 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       {/* Content column */}
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* Tool call indicators */}
-        {message.toolCalls.map((tc, i) => (
-          <ToolIndicator
-            key={i}
-            name={tc.name}
-            detail={extractToolDetail(tc)}
-            completed={tc.output !== null || !message.streaming}
-          />
-        ))}
+        {message.toolCalls.map((tc, i) => {
+          // Pass requestId so ToolIndicator matches on it, not just tool name (#7)
+          const requestId =
+            pendingPermission?.requestId !== undefined &&
+            pendingPermission.toolName === tc.name
+              ? pendingPermission.requestId
+              : undefined;
+          return (
+            <ToolIndicator
+              key={i}
+              name={tc.name}
+              detail={extractToolDetail(tc)}
+              completed={tc.output !== null || !message.streaming}
+              requestId={requestId}
+            />
+          );
+        })}
 
         {/* Inline cards for tool results */}
         {message.toolCalls
