@@ -89,42 +89,45 @@ export default function Header() {
         </span>
       </div>
 
-      {/* Live stats */}
-      <div
-        className="mono"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          fontSize: 11,
-        }}
-      >
-        <StatItem count={running} color="var(--green)"  label="running" glow />
-        <span style={{ color: 'var(--border)', fontSize: 10 }}>·</span>
-        <StatItem count={queued}  color="var(--yellow)" label="queued"  glow />
-        <span style={{ color: 'var(--border)', fontSize: 10 }}>·</span>
-        <StatItem count={failed}  color="var(--red)"    label="failed" />
-      </div>
+      {/* Right side: stats + avatar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        {/* Live stats */}
+        <div
+          className="mono"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            fontSize: 11,
+          }}
+        >
+          <StatItem count={running} color="var(--green)"  label="running" glow />
+          <span style={{ color: 'var(--border)', fontSize: 10 }}>·</span>
+          <StatItem count={queued}  color="var(--yellow)" label="queued"  glow />
+          <span style={{ color: 'var(--border)', fontSize: 10 }}>·</span>
+          <StatItem count={failed}  color="var(--red)"    label="failed" />
+        </div>
 
-      {/* Avatar */}
-      <div
-        style={{
-          width: 26,
-          height: 26,
-          background: 'var(--bg-active)',
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 10,
-          fontWeight: 600,
-          color: 'var(--text-secondary)',
-          cursor: 'pointer',
-          border: '1px solid var(--border)',
-        }}
-        title="Account"
-      >
-        SD
+        {/* Avatar */}
+        <div
+          style={{
+            width: 26,
+            height: 26,
+            background: 'var(--bg-active)',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 10,
+            fontWeight: 600,
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            border: '1px solid var(--border)',
+          }}
+          title="Account"
+        >
+          SD
+        </div>
       </div>
     </header>
   );

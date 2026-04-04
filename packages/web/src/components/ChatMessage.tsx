@@ -2,6 +2,7 @@ import type { ChatMessage as ChatMessageType } from '../types.ts';
 import ToolIndicator from './ToolIndicator.tsx';
 import InlineCard from './InlineCard.tsx';
 import { useChatStore } from '../stores/chat-store.ts';
+import Markdown from 'react-markdown';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -144,9 +145,9 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               border: '1px solid var(--border-subtle)',
               marginTop: message.toolCalls.length > 0 ? 8 : 0,
             }}
-            className={message.streaming && !message.text.endsWith(' ') ? 'streaming-cursor' : ''}
+            className={`chat-markdown ${message.streaming && !message.text.endsWith(' ') ? 'streaming-cursor' : ''}`}
           >
-            {message.text}
+            <Markdown>{message.text}</Markdown>
           </div>
         )}
 
