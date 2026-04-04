@@ -5,6 +5,8 @@ import { useQueueStore } from '../stores/queue-store.ts';
 import type { Execution, Task, QueueInfo } from '../types.ts';
 import { StatusDot } from './StatusBadge.tsx';
 import ExecutionDetail from './ExecutionDetail.tsx';
+import TaskEditor from './TaskEditor.tsx';
+import { updateQueueConcurrency } from '../lib/api.ts';
 
 type PanelTab = 'tasks' | 'execs' | 'queues';
 
@@ -57,6 +59,7 @@ function execBadgeLabel(status: string): string {
 
 function TasksTab({ search }: { search: string }) {
   const { tasks, fetchTasks, runTask } = useTaskStore();
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchTasks();
@@ -75,16 +78,40 @@ function TasksTab({ search }: { search: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {filtered.map((task) => (
-        <TaskItem key={task.id} task={task} onRun={() => void runTask(task.id)} />
+        <div key={task.id}>
+          <TaskItem
+            task={task}
+            active={editingTaskId === task.id}
+            onRun={() => void runTask(task.id)}
+            onEdit={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}
+          />
+          {editingTaskId === task.id && (
+            <TaskEditor
+              task={task}
+              onClose={() => setEditingTaskId(null)}
+            />
+          )}
+        </div>
       ))}
     </div>
   );
 }
 
-function TaskItem({ task, onRun }: { task: Task; onRun: () => void }) {
+function TaskItem({
+  task,
+  active,
+  onRun,
+  onEdit,
+}: {
+  task: Task;
+  active: boolean;
+  onRun: () => void;
+  onEdit: () => void;
+}) {
   const [hovered, setHovered] = useState(false);
   return (
     <div
+      onClick={onEdit}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -92,7 +119,7 @@ function TaskItem({ task, onRun }: { task: Task; onRun: () => void }) {
         padding: '8px 10px',
         borderRadius: 7,
         cursor: 'pointer',
-        background: hovered ? 'var(--bg-hover)' : 'transparent',
+        background: active ? 'var(--bg-active)' : hovered ? 'var(--bg-hover)' : 'transparent',
         transition: 'background 0.12s',
         marginBottom: 2,
       }}
@@ -268,8 +295,16 @@ function ExecutionItem({
 // Queues tab
 // ---------------------------------------------------------------------------
 
+const QUEUE_LABELS: Record<string, string> = {
+  transfer:   'Transfer Queue — dispatches tasks to agents',
+  timer:      'Timer Queue — scheduled retries and cron',
+  visibility: 'Visibility Queue — UI state updates',
+  dlq:        'Dead Letter Queue — failed tasks for inspection',
+};
+
 function QueuesTab({ search }: { search: string }) {
   const { queues, fetchQueues } = useQueueStore();
+  const [editingQueue, setEditingQueue] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchQueues();
@@ -288,63 +323,190 @@ function QueuesTab({ search }: { search: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {filtered.map((q) => (
-        <QueueItem key={q.name} queue={q} />
+        <QueueItem
+          key={q.name}
+          queue={q}
+          expanded={editingQueue === q.name}
+          onToggleEdit={() => setEditingQueue(editingQueue === q.name ? null : q.name)}
+          onSaved={() => { setEditingQueue(null); void fetchQueues(); }}
+        />
       ))}
     </div>
   );
 }
 
-function QueueItem({ queue }: { queue: QueueInfo }) {
+function QueueItem({
+  queue,
+  expanded,
+  onToggleEdit,
+  onSaved,
+}: {
+  queue: QueueInfo;
+  expanded: boolean;
+  onToggleEdit: () => void;
+  onSaved: () => void;
+}) {
   const fillPct = queue.maxConcurrency > 0
     ? Math.min(100, (queue.activeCount / queue.maxConcurrency) * 100)
     : 0;
 
+  const [maxConcurrency, setMaxConcurrency] = useState(queue.maxConcurrency);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Sync local value when the queue data refreshes
+  if (!expanded && maxConcurrency !== queue.maxConcurrency) {
+    setMaxConcurrency(queue.maxConcurrency);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateQueueConcurrency(queue.name, maxConcurrency);
+      onSaved();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const humanLabel = QUEUE_LABELS[queue.name];
+
   return (
     <div
       style={{
-        background: 'var(--bg-raised)',
+        background: expanded ? 'var(--bg-active)' : 'var(--bg-raised)',
         borderRadius: 6,
-        padding: '8px 10px',
-        border: '1px solid var(--border-subtle)',
+        border: `1px solid ${expanded ? 'var(--border)' : 'var(--border-subtle)'}`,
+        overflow: 'hidden',
+        transition: 'background 0.12s, border-color 0.12s',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span className="mono" style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>
-          {queue.name}
-        </span>
-        <span
-          className="mono"
-          style={{
-            fontSize: 10,
-            color: queue.depth > 0 ? 'var(--yellow)' : 'var(--text-muted)',
-          }}
-        >
-          {queue.depth} queued
-        </span>
-      </div>
-      {/* Concurrency bar */}
+      {/* Clickable header row */}
       <div
-        style={{
-          height: 3,
-          background: 'var(--bg-active)',
-          borderRadius: 2,
-          overflow: 'hidden',
-        }}
+        onClick={onToggleEdit}
+        style={{ padding: '8px 10px', cursor: 'pointer' }}
       >
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+          <div>
+            <span className="mono" style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>
+              {queue.name}
+            </span>
+            {humanLabel && (
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                {humanLabel}
+              </div>
+            )}
+          </div>
+          <span
+            className="mono"
+            style={{
+              fontSize: 10,
+              color: queue.depth > 0 ? 'var(--yellow)' : 'var(--text-muted)',
+              alignSelf: 'flex-start',
+            }}
+          >
+            {queue.depth} queued
+          </span>
+        </div>
+        {/* Concurrency bar */}
         <div
           style={{
-            width: `${fillPct}%`,
-            height: '100%',
-            background: fillPct > 80 ? 'var(--red)' : fillPct > 50 ? 'var(--yellow)' : 'var(--green)',
+            height: 3,
+            background: 'var(--bg-active)',
             borderRadius: 2,
-            transition: 'width 0.3s ease',
+            overflow: 'hidden',
+            marginTop: 6,
           }}
-        />
+        >
+          <div
+            style={{
+              width: `${fillPct}%`,
+              height: '100%',
+              background: fillPct > 80 ? 'var(--red)' : fillPct > 50 ? 'var(--yellow)' : 'var(--green)',
+              borderRadius: 2,
+              transition: 'width 0.3s ease',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
+          <span>{queue.activeCount} active</span>
+          <span>{queue.maxConcurrency} max</span>
+        </div>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
-        <span>{queue.activeCount} active</span>
-        <span>{queue.maxConcurrency} max</span>
-      </div>
+
+      {/* Editable fields (shown when expanded) */}
+      {expanded && (
+        <div
+          style={{
+            borderTop: '1px solid var(--border-subtle)',
+            padding: '8px 10px',
+          }}
+        >
+          {saveError && (
+            <div style={{ fontSize: 11, color: 'var(--red)', marginBottom: 6 }}>{saveError}</div>
+          )}
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>
+              Max Concurrency
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={maxConcurrency}
+              onChange={(e) => setMaxConcurrency(Number(e.target.value))}
+              style={{
+                width: '100%',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 5,
+                padding: '4px 8px',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 12,
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            <button
+              onClick={onToggleEdit}
+              style={{
+                padding: '3px 10px',
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                color: 'var(--text-secondary)',
+                fontSize: 11,
+                cursor: 'pointer',
+                fontFamily: 'var(--font-body)',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void handleSave()}
+              disabled={saving}
+              style={{
+                padding: '3px 10px',
+                background: saving ? 'var(--bg-active)' : 'var(--accent)',
+                border: 'none',
+                borderRadius: 4,
+                color: 'white',
+                fontSize: 11,
+                cursor: saving ? 'not-allowed' : 'pointer',
+                fontFamily: 'var(--font-body)',
+                opacity: saving ? 0.6 : 1,
+              }}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

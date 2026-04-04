@@ -493,6 +493,13 @@ export class SQLiteStore implements IStore {
     };
   }
 
+  updateQueueConcurrency(name: string, maxConcurrency: number): QueueInfo | null {
+    const existing = this.db.query("SELECT name FROM queues WHERE name = ?").get(name) as { name: string } | null;
+    if (!existing) return null;
+    this.db.run("UPDATE queues SET max_concurrency = ? WHERE name = ?", [maxConcurrency, name]);
+    return this.getQueueInfo(name);
+  }
+
   // -------------------------------------------------------------------------
   // Templates
   // -------------------------------------------------------------------------

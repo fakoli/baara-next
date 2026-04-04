@@ -115,7 +115,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             key={i}
             name={tc.name}
             detail={extractToolDetail(tc)}
-            completed={tc.output !== null}
+            completed={tc.output !== null || !message.streaming}
           />
         ))}
 

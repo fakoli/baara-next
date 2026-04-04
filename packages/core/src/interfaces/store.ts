@@ -236,6 +236,12 @@ export interface IStore {
   /** Return metadata for a single queue, or null if the queue does not exist. */
   getQueueInfo(name: string): QueueInfo | null;
 
+  /**
+   * Update the max_concurrency limit for a queue.
+   * Returns the updated QueueInfo, or null if the queue does not exist.
+   */
+  updateQueueConcurrency(name: string, maxConcurrency: number): QueueInfo | null;
+
   // -------------------------------------------------------------------------
   // Templates
   // -------------------------------------------------------------------------

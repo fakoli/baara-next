@@ -31,12 +31,16 @@ interface ChatStore {
   /** Selected Claude model for chat */
   model: string;
 
+  /** Custom system instructions prepended to each request's system prompt */
+  systemInstructions: string;
+
   sendMessage: (text: string, abortSignal?: AbortSignal) => Promise<void>;
   loadThread: (thread: Thread) => void;
   clearChat: () => void;
   setPermissionMode: (mode: PermissionMode) => void;
   respondToPermission: (requestId: string, decision: PermissionDecision) => void;
   setModel: (model: string) => void;
+  setSystemInstructions: (text: string) => void;
 }
 
 function newUserMessage(text: string): ChatMessage {
@@ -70,6 +74,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   sessionCostUsd: 0,
   toolCallCount: 0,
   model: 'claude-sonnet-4-20250514',
+  systemInstructions: '',
   permissionMode: 'auto',
   approvedTools: new Set<string>(),
   pendingPermission: null,
@@ -92,6 +97,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         threadId: get().threadId ?? undefined,
         permissionMode: get().permissionMode,
         model: get().model,
+        systemInstructions: get().systemInstructions || undefined,
         signal: abortSignal,
       });
 
@@ -289,6 +295,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setModel: (model) => {
     set({ model });
+  },
+
+  setSystemInstructions: (text) => {
+    set({ systemInstructions: text });
   },
 
   respondToPermission: (requestId, decision) => {

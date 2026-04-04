@@ -55,6 +55,8 @@ interface ChatRequest {
   permissionMode?: PermissionMode;
   /** Claude model to use for this request */
   model?: string;
+  /** Custom system instructions prepended to the base system prompt */
+  systemInstructions?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +176,7 @@ export function chatRoutes(deps: ChatDeps): Hono {
       return c.json({ error: "Invalid JSON body" }, 400);
     }
 
-    const { message, sessionId, activeProjectId, permissionMode = "auto", model } = body;
+    const { message, sessionId, activeProjectId, permissionMode = "auto", model, systemInstructions } = body;
     let { threadId } = body;
     if (!message || typeof message !== "string" || message.trim() === "") {
       return c.json({ error: "message is required" }, 400);
@@ -190,7 +192,11 @@ export function chatRoutes(deps: ChatDeps): Hono {
 
     // Build context and system prompt synchronously before streaming starts
     const ctx = gatherChatContext(deps.store, { threadId, activeProjectId });
-    const systemPrompt = buildSystemPrompt(ctx);
+    const basePrompt = buildSystemPrompt(ctx);
+    // Prepend custom user instructions when provided
+    const systemPrompt = systemInstructions && systemInstructions.trim()
+      ? `${systemInstructions.trim()}\n\n---\n\n${basePrompt}`
+      : basePrompt;
 
     // Resolve or generate a session ID
     const resolvedSessionId = sessionId ?? crypto.randomUUID();

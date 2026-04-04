@@ -58,5 +58,24 @@ export function queueRoutes(store: IStore): Hono {
     return c.json(queue);
   });
 
+  // PUT /api/queues/:name — update mutable queue settings (maxConcurrency)
+  router.put("/:name", async (c) => {
+    const name = c.req.param("name");
+    let body: { maxConcurrency?: unknown };
+    try {
+      body = await c.req.json<{ maxConcurrency?: unknown }>();
+    } catch {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+    if (body.maxConcurrency === undefined || typeof body.maxConcurrency !== "number" || body.maxConcurrency < 1) {
+      return c.json({ error: "maxConcurrency must be a positive number" }, 400);
+    }
+    const updated = store.updateQueueConcurrency(name, body.maxConcurrency);
+    if (!updated) {
+      return c.json({ error: `Queue not found: "${name}"` }, 404);
+    }
+    return c.json(updated);
+  });
+
   return router;
 }

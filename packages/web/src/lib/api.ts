@@ -114,6 +114,13 @@ export function fetchQueues(): Promise<QueueInfo[]> {
   return request<QueueInfo[]>('/api/queues');
 }
 
+export function updateQueueConcurrency(name: string, maxConcurrency: number): Promise<QueueInfo> {
+  return request<QueueInfo>(`/api/queues/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ maxConcurrency }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // System
 // ---------------------------------------------------------------------------
@@ -176,6 +183,7 @@ export async function* streamChat(
     activeProjectId?: string | null;
     permissionMode?: PermissionMode;
     model?: string;
+    systemInstructions?: string;
     signal?: AbortSignal;
   }
 ): AsyncGenerator<SSEEvent> {
@@ -189,6 +197,7 @@ export async function* streamChat(
       activeProjectId: opts.activeProjectId,
       permissionMode: opts.permissionMode ?? 'auto',
       model: opts.model,
+      systemInstructions: opts.systemInstructions,
     }),
     signal: opts.signal,
   });
