@@ -127,11 +127,18 @@ function createPermissionAwareMcpServer(
         let decision: string;
         try {
           decision = await new Promise<string>((resolve, reject) => {
-            pendingPermissions.set(requestId, { resolve, sessionId });
+            const cleanup = setTimeout(() => {
+              if (pendingPermissions.delete(requestId)) {
+                reject(new Error("Permission request timed out"));
+              }
+            }, 5 * 60 * 1000);
+
+            pendingPermissions.set(requestId, { resolve: (d: string) => { clearTimeout(cleanup); resolve(d); }, sessionId });
             // Fire-and-forget the SSE emission (it's async but we don't await here
             // to avoid a promise ordering issue — the Map entry is set first)
             void sendPermissionRequest(requestId, toolName, toolInput);
             abortController.signal.addEventListener("abort", () => {
+              clearTimeout(cleanup);
               if (pendingPermissions.delete(requestId)) {
                 reject(new Error("Client disconnected"));
               }

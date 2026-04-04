@@ -211,7 +211,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }
       }
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
+      if ((err as Error).name === 'AbortError') {
+        set((s) => ({
+          messages: s.messages.map((m) =>
+            m.id === agentMsg.id ? { ...m, streaming: false } : m
+          ),
+        }));
+        return;
+      }
       set((s) => ({
         error: err instanceof Error ? err.message : 'Chat failed',
         messages: s.messages.map((m) =>
@@ -302,21 +309,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   respondToPermission: (requestId, decision) => {
-    // Capture the tool name before clearing state
     const pending = get().pendingPermission;
+    const currentSessionId = get().sessionId;
 
-    // Clear the pending permission immediately so the UI is no longer blocked
     set({ pendingPermission: null });
 
-    // For "allow_task", remember the tool so future calls are auto-approved
+    if (!currentSessionId) {
+      console.error('[chat] Cannot respond to permission: no active sessionId');
+      return;
+    }
+
     if (decision === 'allow_task' && pending) {
       set((s) => ({
         approvedTools: new Set([...s.approvedTools, pending.toolName]),
       }));
     }
 
-    // Fire-and-forget; the server resolves the waiting Promise
-    const currentSessionId = get().sessionId ?? '';
     void respondToPermission(requestId, decision, currentSessionId).catch((err: unknown) => {
       console.error('[chat] respondToPermission failed', err);
     });

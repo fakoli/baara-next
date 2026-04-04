@@ -482,6 +482,11 @@ export class OrchestratorService implements IOrchestratorService {
         ? "timed_out"
         : "failed";
 
+    // If still waiting_for_input (client disconnected before responding), force to running
+    if (execution.status === "waiting_for_input") {
+      this.store.updateExecutionStatus(executionId, "running");
+    }
+
     // Only running is a valid entry state for completion.
     // waiting_for_input cannot transition directly to a terminal status — the
     // execution must return to running first (via provideInput).

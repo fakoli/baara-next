@@ -667,6 +667,9 @@ export class SQLiteStore implements IStore {
   }
 
   deleteThread(id: string): void {
+    if (id === "00000000-0000-0000-0000-000000000000") {
+      throw new Error("The Main thread cannot be deleted");
+    }
     const existing = this.getThread(id);
     if (!existing) throw new ThreadNotFoundError(id);
     // thread_id FK on executions is ON DELETE SET NULL — SQLite handles unlinking
