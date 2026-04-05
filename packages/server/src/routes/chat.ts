@@ -228,6 +228,23 @@ export function chatRoutes(deps: ChatDeps): Hono {
       const title = message.trim().slice(0, 60);
       const newThread = deps.store.createThread(crypto.randomUUID(), title);
       threadId = newThread.id;
+    } else {
+      // When the client pre-created a thread (e.g. "+ New" button) it gets the
+      // placeholder title "New Thread".  Update it to the first message content
+      // on the very first send so the sidebar reflects what the conversation is
+      // actually about.
+      // Update placeholder title on first message. The constant matches the
+      // default used by POST /api/chat/threads (the "+ New" button handler).
+      const PLACEHOLDER_TITLE = "New Thread";
+      const existingThread = deps.store.getThread(threadId);
+      if (existingThread && existingThread.title === PLACEHOLDER_TITLE) {
+        try {
+          deps.store.updateThread(threadId, { title: message.trim().slice(0, 60) });
+        } catch {
+          // Thread may have been deleted between getThread and updateThread (TOCTOU).
+          // Non-fatal — the conversation will still work, just with a stale title.
+        }
+      }
     }
 
     // Build context and system prompt synchronously before streaming starts
