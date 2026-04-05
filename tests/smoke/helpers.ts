@@ -37,8 +37,10 @@ export interface StartServerOpts {
  */
 export async function startServer(opts: StartServerOpts = {}): Promise<ServerHandle> {
   // Apply any extra env vars the test needs (e.g. BAARA_SHELL_ENABLED=true).
+  // Always disable rate limiting in tests to avoid 429s on rapid calls.
   const envBackup: Record<string, string | undefined> = {};
-  for (const [k, v] of Object.entries(opts.env ?? {})) {
+  const testEnv = { BAARA_DISABLE_RATE_LIMIT: "true", ...opts.env };
+  for (const [k, v] of Object.entries(testEnv)) {
     envBackup[k] = process.env[k];
     process.env[k] = v;
   }
