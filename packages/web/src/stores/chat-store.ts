@@ -112,11 +112,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           }
 
           case 'text': {
-            // Full text message from the agent
+            // Full text message from the agent — also mark all tool calls completed
             set((s) => ({
-              messages: s.messages.map((m) =>
-                m.id === agentMsg.id ? { ...m, text: event.content } : m
-              ),
+              messages: s.messages.map((m) => {
+                if (m.id !== agentMsg.id) return m;
+                const completedCalls = m.toolCalls.map((tc) =>
+                  tc.output === null ? { ...tc, output: '(completed)' } : tc
+                );
+                return { ...m, text: event.content, toolCalls: completedCalls };
+              }),
             }));
             break;
           }
@@ -133,17 +137,26 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           case 'tool_use': {
             set((s) => ({
               toolCallCount: s.toolCallCount + 1,
-              messages: s.messages.map((m) =>
-                m.id === agentMsg.id
-                  ? {
-                      ...m,
-                      toolCalls: [
-                        ...m.toolCalls,
-                        { name: event.name, input: event.input, output: null },
-                      ],
-                    }
-                  : m
-              ),
+              messages: s.messages.map((m) => {
+                if (m.id !== agentMsg.id) return m;
+                // Mark all previous tool calls as completed (the SDK doesn't
+                // Do NOT auto-complete previous calls here; prior calls are
+                // resolved when the agent begins its next turn (text_delta).
+                return {
+                  ...m,
+                  toolCalls: [
+                    ...m.toolCalls,
+                    { name: event.name, input: event.input, output: null },
+                  ],
+                };
+                return {
+                  ...m,
+                  toolCalls: [
+                    ...completedCalls,
+                    { name: event.name, input: event.input, output: null },
+                  ],
+                };
+              }),
             }));
             break;
           }
