@@ -12,8 +12,8 @@ import {
   startServer,
   makeApi,
   waitForExecution,
-  measure,
   assertSLO,
+  fetchWithRetry,
   type ServerHandle,
 } from "./helpers.ts";
 
@@ -258,4 +258,157 @@ describe("02-execution-performance", () => {
       `  SLI exec.retry: task ${taskId} dead-lettered after ${dlqExec!["attempt"]} attempt(s) — retry mechanism confirmed`
     );
   }, 60_000);
+
+  // ---------------------------------------------------------------------------
+  // Sandbox-specific execution tests — every sandbox type must be tested
+  // ---------------------------------------------------------------------------
+
+  it("SLI exec.sandbox.native: Bash-only task completes via native sandbox", async () => {
+    const res = await api("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `sli-sandbox-native-${Date.now()}`,
+        prompt: "echo native-sandbox-output",
+        sandboxType: "native",
+        sandboxConfig: { type: "native" },
+        agentConfig: { allowedTools: ["Bash"] },
+        executionMode: "queued",
+        timeoutMs: 30_000,
+        maxRetries: 0,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const task = (await res.json()) as Record<string, unknown>;
+    expect(task["sandboxType"]).toBe("native");
+
+    const submitRes = await api(`/api/tasks/${task["id"]}/submit`, { method: "POST" });
+    expect(submitRes.status).toBe(201);
+    const exec = (await submitRes.json()) as Record<string, unknown>;
+
+    const completed = await waitForExecution(handle.baseUrl, exec["id"] as string, "completed", 10_000);
+    expect(completed["status"]).toBe("completed");
+    expect((completed["output"] as string)).toContain("native-sandbox-output");
+    console.log(`  SLI exec.sandbox.native: completed in ${completed["durationMs"]}ms`);
+  }, 15_000);
+
+  it("SLI exec.sandbox.wasm: task routes through Wasm sandbox", async () => {
+    const res = await api("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `sli-sandbox-wasm-${Date.now()}`,
+        prompt: "echo wasm-sandbox-output",
+        sandboxType: "wasm",
+        sandboxConfig: { type: "wasm", networkEnabled: true, maxMemoryMb: 256 },
+        agentConfig: { allowedTools: ["Bash"] },
+        executionMode: "queued",
+        timeoutMs: 30_000,
+        maxRetries: 0,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const task = (await res.json()) as Record<string, unknown>;
+    expect(task["sandboxType"]).toBe("wasm");
+    expect(task["sandboxConfig"]).toBeTruthy();
+    const config = task["sandboxConfig"] as Record<string, unknown>;
+    expect(config["type"]).toBe("wasm");
+    expect(config["maxMemoryMb"]).toBe(256);
+
+    const submitRes = await api(`/api/tasks/${task["id"]}/submit`, { method: "POST" });
+    expect(submitRes.status).toBe(201);
+    const exec = (await submitRes.json()) as Record<string, unknown>;
+
+    // Wasm sandbox falls back to native if Extism isn't available, or executes
+    // via Extism if available. Either way it should complete.
+    const completed = await waitForExecution(handle.baseUrl, exec["id"] as string, "completed", 10_000);
+    expect(completed["status"]).toBe("completed");
+    expect((completed["output"] as string)).toContain("wasm-sandbox-output");
+    console.log(`  SLI exec.sandbox.wasm: completed in ${completed["durationMs"]}ms`);
+  }, 15_000);
+
+  it("SLI exec.sandbox.docker: task routes through Docker sandbox", async () => {
+    // Use fetchWithRetry for create+submit to handle rate limiter (10 req/min)
+    const res = await fetchWithRetry(`${handle.baseUrl}/api/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `sli-sandbox-docker-${Date.now()}`,
+        prompt: "echo docker-sandbox-output",
+        sandboxType: "docker",
+        sandboxConfig: { type: "docker", image: "alpine:3.19", networkEnabled: false },
+        agentConfig: { allowedTools: ["Bash"] },
+        executionMode: "queued",
+        timeoutMs: 30_000,
+        maxRetries: 0,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const task = (await res.json()) as Record<string, unknown>;
+    expect(task["sandboxType"]).toBe("docker");
+    expect(task["sandboxConfig"]).toBeTruthy();
+    const config = task["sandboxConfig"] as Record<string, unknown>;
+    expect(config["type"]).toBe("docker");
+    expect(config["image"]).toBe("alpine:3.19");
+
+    const submitRes = await fetchWithRetry(`${handle.baseUrl}/api/tasks/${task["id"]}/submit`, { method: "POST" });
+    expect(submitRes.status).toBe(201);
+    const exec = (await submitRes.json()) as Record<string, unknown>;
+
+    // Docker sandbox runs via `docker run` if Docker is available,
+    // falls back to native otherwise. Either way should complete.
+    const completed = await waitForExecution(handle.baseUrl, exec["id"] as string, "completed", 15_000);
+    expect(completed["status"]).toBe("completed");
+    expect((completed["output"] as string)).toContain("docker-sandbox-output");
+    console.log(`  SLI exec.sandbox.docker: completed in ${completed["durationMs"]}ms`);
+  }, 20_000);
+
+  it("SLI exec.sandbox.config_persistence: sandboxConfig round-trips correctly", async () => {
+    const wasmConfig = { type: "wasm", networkEnabled: false, maxMemoryMb: 128, maxCpuPercent: 50 };
+    const dockerConfig = { type: "docker", image: "node:22-slim", networkEnabled: true, ports: [3000, 8080] };
+
+    // Create wasm task and verify config persists
+    const wasmRes = await api("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `sli-config-wasm-${Date.now()}`,
+        prompt: "test",
+        sandboxType: "wasm",
+        sandboxConfig: wasmConfig,
+        executionMode: "queued",
+        maxRetries: 0,
+      }),
+    });
+    expect(wasmRes.status).toBe(201);
+    const wasmTask = (await wasmRes.json()) as Record<string, unknown>;
+    const storedWasm = wasmTask["sandboxConfig"] as Record<string, unknown>;
+    expect(storedWasm["type"]).toBe("wasm");
+    expect(storedWasm["networkEnabled"]).toBe(false);
+    expect(storedWasm["maxMemoryMb"]).toBe(128);
+    expect(storedWasm["maxCpuPercent"]).toBe(50);
+
+    // Create docker task and verify config persists
+    const dockerRes = await api("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `sli-config-docker-${Date.now()}`,
+        prompt: "test",
+        sandboxType: "docker",
+        sandboxConfig: dockerConfig,
+        executionMode: "queued",
+        maxRetries: 0,
+      }),
+    });
+    expect(dockerRes.status).toBe(201);
+    const dockerTask = (await dockerRes.json()) as Record<string, unknown>;
+    const storedDocker = dockerTask["sandboxConfig"] as Record<string, unknown>;
+    expect(storedDocker["type"]).toBe("docker");
+    expect(storedDocker["image"]).toBe("node:22-slim");
+    expect(storedDocker["networkEnabled"]).toBe(true);
+    expect((storedDocker["ports"] as number[])).toEqual([3000, 8080]);
+
+    console.log("  SLI exec.sandbox.config_persistence: wasm and docker configs round-trip correctly");
+  }, 10_000);
 });

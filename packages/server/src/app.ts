@@ -84,6 +84,11 @@ function makeRateLimiter(maxRequests: number = RATE_LIMIT_MAX) {
       // Prefer x-real-ip (set by a trusted reverse proxy) over x-forwarded-for
       // (trivially spoofable by the client).  Fall back to the raw socket address
       // when neither header is present.
+      // Allow tests to disable rate limiting entirely.
+      if (process.env["BAARA_DISABLE_RATE_LIMIT"] === "true") {
+        await next();
+        return;
+      }
       const ip = c.req.header("x-real-ip")
         || (c.env as Record<string, unknown>)?.["ip"] as string | undefined
         || c.req.header("x-forwarded-for")?.split(",")[0]?.trim()

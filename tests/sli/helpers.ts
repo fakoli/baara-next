@@ -54,5 +54,22 @@ export function p99(samples: number[]): number {
   return sorted[Math.max(0, idx)]!;
 }
 
+/**
+ * Fetch with automatic retry on 429 (rate limit).
+ * Waits 2 seconds between retries, up to 3 attempts.
+ */
+export async function fetchWithRetry(
+  url: string,
+  init?: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  for (let i = 0; i < maxRetries; i++) {
+    const res = await fetch(url, init);
+    if (res.status !== 429) return res;
+    await Bun.sleep(2000);
+  }
+  return fetch(url, init);
+}
+
 // Re-export bun:test primitives so callers can import from a single location.
 export { describe, it, expect, beforeAll, afterAll } from "bun:test";
