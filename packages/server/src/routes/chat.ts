@@ -569,6 +569,22 @@ export function chatRoutes(deps: ChatDeps): Hono {
   });
 
   // -------------------------------------------------------------------------
+  // POST /api/chat/threads — create a new empty thread immediately
+  //
+  // Body: { title?: string }
+  // Returns: Thread (201)
+  // -------------------------------------------------------------------------
+  router.post("/threads", async (c) => {
+    const body = await c.req.json().catch(() => ({})) as { title?: unknown };
+    const rawTitle = body?.title;
+    const title = typeof rawTitle === "string" && rawTitle.trim()
+      ? rawTitle.trim().slice(0, 60)
+      : "New Thread";
+    const thread = deps.store.createThread(crypto.randomUUID(), title);
+    return c.json(thread, 201);
+  });
+
+  // -------------------------------------------------------------------------
   // PUT /api/chat/sessions/:id/rename — rename a thread title
   // -------------------------------------------------------------------------
   router.put("/sessions/:id/rename", async (c) => {

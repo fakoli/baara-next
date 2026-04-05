@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Task, ExecutionType, ExecutionMode, Priority } from '../types.ts';
-import { updateTask } from '../lib/api.ts';
+import { updateTask, createTask } from '../lib/api.ts';
 import { useTaskStore } from '../stores/task-store.ts';
 import { useThreadStore } from '../stores/thread-store.ts';
 
@@ -8,8 +8,12 @@ import { useThreadStore } from '../stores/thread-store.ts';
 const MAIN_THREAD_ID = '00000000-0000-0000-0000-000000000000';
 
 interface TaskEditorProps {
-  task: Task;
+  /** When mode is 'edit', task must be provided. When mode is 'create', task is omitted. */
+  task?: Task;
+  mode?: 'edit' | 'create';
   onClose: () => void;
+  /** Called after a successful create (mode='create') so the parent can refresh. */
+  onCreated?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -36,32 +40,34 @@ const labelStyle: React.CSSProperties = {
   display: 'block',
 };
 
-export default function TaskEditor({ task, onClose }: TaskEditorProps) {
+export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: TaskEditorProps) {
   const fetchTasks = useTaskStore((s) => s.fetchTasks);
   const { threads, fetchThreads } = useThreadStore();
 
-  const [name, setName] = useState(task.name);
-  const [prompt, setPrompt] = useState(task.prompt);
-  const [executionType, setExecutionType] = useState<ExecutionType>(task.executionType);
-  const [executionMode, setExecutionMode] = useState<ExecutionMode>(task.executionMode);
-  const [priority, setPriority] = useState<Priority>(task.priority);
-  const [cronExpression, setCronExpression] = useState(task.cronExpression ?? '');
-  const [maxRetries, setMaxRetries] = useState(task.maxRetries);
-  const [timeoutMs, setTimeoutMs] = useState(task.timeoutMs);
+  const isCreate = mode === 'create';
+
+  const [name, setName] = useState(task?.name ?? '');
+  const [prompt, setPrompt] = useState(task?.prompt ?? '');
+  const [executionType, setExecutionType] = useState<ExecutionType>(task?.executionType ?? 'cloud_code');
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>(task?.executionMode ?? 'queued');
+  const [priority, setPriority] = useState<Priority>(task?.priority ?? 2);
+  const [cronExpression, setCronExpression] = useState(task?.cronExpression ?? '');
+  const [maxRetries, setMaxRetries] = useState(task?.maxRetries ?? 3);
+  const [timeoutMs, setTimeoutMs] = useState(task?.timeoutMs ?? 300_000);
   const [targetThreadId, setTargetThreadId] = useState<string>(
-    task.targetThreadId ?? MAIN_THREAD_ID
+    task?.targetThreadId ?? MAIN_THREAD_ID
   );
 
   // agentConfig fields
   const [allowedTools, setAllowedTools] = useState(
-    task.agentConfig?.allowedTools?.join(', ') ?? ''
+    task?.agentConfig?.allowedTools?.join(', ') ?? ''
   );
-  const [model, setModel] = useState(task.agentConfig?.model ?? '');
+  const [model, setModel] = useState(task?.agentConfig?.model ?? '');
   const [budgetUsd, setBudgetUsd] = useState<string>(
-    task.agentConfig?.budgetUsd != null ? String(task.agentConfig.budgetUsd) : ''
+    task?.agentConfig?.budgetUsd != null ? String(task.agentConfig.budgetUsd) : ''
   );
   const [systemPrompt, setSystemPrompt] = useState(
-    task.agentConfig?.systemPrompt ?? ''
+    task?.agentConfig?.systemPrompt ?? ''
   );
 
   const [saving, setSaving] = useState(false);
@@ -75,6 +81,20 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
     setSaving(true);
     setSaveError(null);
     try {
+      // Validate name in create mode
+      if (isCreate && !name.trim()) {
+        setSaveError('Name is required');
+        setSaving(false);
+        return;
+      }
+
+      // Validate prompt
+      if (!prompt.trim()) {
+        setSaveError('Prompt is required');
+        setSaving(false);
+        return;
+      }
+
       // Validate budgetUsd before saving (#10)
       if (budgetUsd.trim()) {
         const parsedBudget = Number(budgetUsd);
@@ -86,7 +106,7 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
       }
 
       const agentConfig = {
-        ...(task.agentConfig ?? {}),
+        ...(task?.agentConfig ?? {}),
         // Setting to undefined explicitly removes the key so a previously-set
         // value is cleared when the user empties the field.
         model: model.trim() || undefined,
@@ -97,24 +117,44 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
         systemPrompt: systemPrompt.trim() || undefined,
       };
 
-      await updateTask(task.id, {
-        name: name.trim(),
-        prompt: prompt.trim(),
-        executionType,
-        executionMode,
-        priority,
-        cronExpression: cronExpression.trim() || null,
-        maxRetries,
-        timeoutMs,
-        agentConfig: Object.keys(agentConfig).length > 0 ? agentConfig : null,
-        // Store null when Main thread is chosen so the orchestrator's default
-        // routing logic applies (saves storage and handles Main thread renames).
-        targetThreadId: targetThreadId === MAIN_THREAD_ID ? null : targetThreadId,
-      });
+      const resolvedAgentConfig = Object.keys(agentConfig).length > 0 ? agentConfig : null;
+      const resolvedTargetThreadId = targetThreadId === MAIN_THREAD_ID ? null : targetThreadId;
 
-      // Refresh the task list so the sidebar reflects the new values
-      await fetchTasks();
-      onClose();
+      if (isCreate) {
+        await createTask({
+          name: name.trim(),
+          prompt: prompt.trim(),
+          executionType,
+          executionMode,
+          priority,
+          cronExpression: cronExpression.trim() || null,
+          maxRetries,
+          timeoutMs,
+          agentConfig: resolvedAgentConfig,
+          targetThreadId: resolvedTargetThreadId,
+        });
+        await fetchTasks();
+        onCreated?.();
+      } else {
+        if (!task) return;
+        await updateTask(task.id, {
+          name: name.trim(),
+          prompt: prompt.trim(),
+          executionType,
+          executionMode,
+          priority,
+          cronExpression: cronExpression.trim() || null,
+          maxRetries,
+          timeoutMs,
+          agentConfig: resolvedAgentConfig,
+          // Store null when Main thread is chosen so the orchestrator's default
+          // routing logic applies (saves storage and handles Main thread renames).
+          targetThreadId: resolvedTargetThreadId,
+        });
+        // Refresh the task list so the sidebar reflects the new values
+        await fetchTasks();
+        onClose();
+      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Save failed');
     } finally {
@@ -151,7 +191,7 @@ export default function TaskEditor({ task, onClose }: TaskEditorProps) {
           letterSpacing: '0.05em',
         }}
       >
-        Edit Task
+        {isCreate ? 'New Task' : 'Edit Task'}
       </div>
 
       {saveError && (
