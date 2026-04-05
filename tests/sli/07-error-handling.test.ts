@@ -6,12 +6,14 @@
 // Tests:
 //   GET /api/tasks/nonexistent → 404
 //   GET /api/executions/nonexistent → 404
+//   GET /api/executions/nonexistent-uuid/events → 200 [] (store returns empty, not 404)
 //   POST /api/tasks with missing name → 400
 //   POST /api/tasks with missing prompt → 400
 //   POST /api/tasks with duplicate name → 409
 //   POST /api/chat/permission with invalid requestId → 404
 //   PUT /api/queues/:name with maxConcurrency=0 → 400
 //   PUT /api/queues/:name with maxConcurrency=2.5 → 400
+//   PUT /api/queues/:name with maxConcurrency=-1 → 400
 //   POST /api/executions/:id/cancel on a completed execution → 409
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
@@ -81,35 +83,18 @@ describe("07-error-handling", () => {
     await assertErrorResponse(res, 404);
   });
 
-  it("GET /api/executions/nonexistent/events returns 200 empty array (no execution filter)", async () => {
-    // The events endpoint returns whatever events exist for the given ID —
-    // if none, it's an empty array. The underlying store returns [] rather than 404.
-    // Verify at minimum that a valid call returns 200 with an array.
-    const taskRes = await api("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: `sli-err-events-${Date.now()}`,
-        prompt: "echo events-error-test",
-        sandboxType: "native",
-        executionMode: "queued",
-      }),
-    });
-    expect(taskRes.status).toBe(201);
-    const task = (await taskRes.json()) as Record<string, unknown>;
-    const taskId = task["id"] as string;
-
-    // Submit and complete so we can test events properly
-    const submitRes = await api(`/api/tasks/${taskId}/submit`, { method: "POST" });
-    const execution = (await submitRes.json()) as Record<string, unknown>;
-    const execId = execution["id"] as string;
-    await waitForExecution(handle.baseUrl, execId, "completed", 20_000);
-
-    const eventsRes = await api(`/api/executions/${execId}/events`);
-    expect(eventsRes.status).toBe(200);
-    const events = (await eventsRes.json()) as Array<unknown>;
+  it("GET /api/executions/nonexistent-uuid/events returns 200 empty array", async () => {
+    // The events store returns [] for any execution ID that has no events —
+    // including a UUID that never existed. The route does not do a prior
+    // existence check, so 200+[] is the defined contract (not 404).
+    const res = await api(
+      "/api/executions/00000000-0000-0000-0000-000000000000/events"
+    );
+    expect(res.status).toBe(200);
+    const events = (await res.json()) as Array<unknown>;
     expect(Array.isArray(events)).toBe(true);
-  }, 30_000);
+    expect(events.length).toBe(0);
+  });
 
   // ---------------------------------------------------------------------------
   // 400 — Bad request / missing required fields

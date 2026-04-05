@@ -110,11 +110,17 @@ describe("06-thread-routing", () => {
     const messages = (await msgsRes.json()) as Array<Record<string, unknown>>;
     expect(Array.isArray(messages)).toBe(true);
 
-    // Find the agent completion message for this task
+    // Find the agent completion message for this task.
+    // Both alternatives must be guarded by role === "agent" — wrap them in
+    // an outer conjunction to avoid the && / || precedence pitfall.
     const agentMsg = messages.find(
-      (m) => m["role"] === "agent" && typeof m["content"] === "string" &&
-        (m["content"] as string).includes("routing-to-main") ||
-        typeof m["content"] === "string" && (m["content"] as string).includes(task["name"] as string)
+      (m) =>
+        m["role"] === "agent" &&
+        typeof m["content"] === "string" &&
+        (
+          (m["content"] as string).includes("routing-to-main") ||
+          (m["content"] as string).includes(task["name"] as string)
+        )
     );
     expect(agentMsg).toBeDefined();
     console.log(
@@ -190,8 +196,34 @@ describe("06-thread-routing", () => {
   // ---------------------------------------------------------------------------
 
   it("thread messages endpoint returns agent message after task completion", async () => {
-    // Use Main thread for this check — it accumulates messages from all
-    // tasks that route to it (including the one from the first routing test).
+    // This test is self-contained: it creates and runs its own task rather than
+    // relying on state produced by any earlier test in this file.
+    const createRes = await api("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `sli-msgs-check-${Date.now()}`,
+        prompt: "echo thread-messages-check",
+        sandboxType: "native",
+        agentConfig: { allowedTools: ["Bash"] },
+        executionMode: "queued",
+        timeoutMs: 30_000,
+        maxRetries: 0,
+        // targetThreadId omitted → routes to Main thread
+      }),
+    });
+    expect(createRes.status).toBe(201);
+    const task = (await createRes.json()) as Record<string, unknown>;
+    const taskId = task["id"] as string;
+
+    const submitRes = await api(`/api/tasks/${taskId}/submit`, { method: "POST" });
+    expect(submitRes.status).toBe(201);
+    const execution = (await submitRes.json()) as Record<string, unknown>;
+    const execId = execution["id"] as string;
+
+    await waitForExecution(handle.baseUrl, execId, "completed", 25_000);
+
+    // Now verify the Main thread's messages endpoint
     const msgsRes = await api(`/api/chat/sessions/${MAIN_THREAD_ID}/messages`);
     expect(msgsRes.status).toBe(200);
 
@@ -207,7 +239,7 @@ describe("06-thread-routing", () => {
       expect(typeof msg["createdAt"]).toBe("string");
     }
 
-    // There should be at least one agent message from the routing test above
+    // The task we just ran must have produced an agent message in this thread
     const agentMessages = messages.filter((m) => m["role"] === "agent");
     expect(agentMessages.length).toBeGreaterThan(0);
     console.log(

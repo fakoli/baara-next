@@ -5,7 +5,7 @@
 //
 // Tests:
 //   initialize returns correct protocolVersion and serverInfo
-//   tools/list returns all 27 tools with names and descriptions
+//   tools/list returns at least 27 tools with names and descriptions
 //   Each tool has an inputSchema field (JSON Schema)
 //   tools/call with valid args returns structured result
 //   tools/call with invalid tool name returns proper error
@@ -77,7 +77,7 @@ describe("05-mcp-protocol", () => {
   // tools/list — returns all 27 tools with names and descriptions
   // ---------------------------------------------------------------------------
 
-  it("MCP tools/list returns exactly 27 tools", async () => {
+  it("MCP tools/list returns at least 27 tools", async () => {
     const resp = await rpc("tools/list");
     expect(resp["error"]).toBeUndefined();
 
@@ -85,8 +85,9 @@ describe("05-mcp-protocol", () => {
     const tools = result["tools"] as Array<Record<string, unknown>>;
     expect(Array.isArray(tools)).toBe(true);
 
-    console.log(`  MCP tools count: ${tools.length} (target: 27)`);
-    expect(tools.length).toBe(27);
+    console.log(`  MCP tools count: ${tools.length} (minimum expected: 27)`);
+    // Use toBeGreaterThanOrEqual so adding new tools does not break this test.
+    expect(tools.length).toBeGreaterThanOrEqual(27);
   });
 
   it("MCP tools/list each tool has a name and description", async () => {

@@ -131,27 +131,8 @@ describe("04-queue-management", () => {
     expect(restored["maxConcurrency"]).toBe(originalMax);
   });
 
-  it("PUT /api/queues/transfer with maxConcurrency=0 returns 400", async () => {
-    const res = await api("/api/queues/transfer", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ maxConcurrency: 0 }),
-    });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as Record<string, unknown>;
-    expect(typeof body["error"]).toBe("string");
-  });
-
-  it("PUT /api/queues/transfer with maxConcurrency=2.5 (non-integer) returns 400", async () => {
-    const res = await api("/api/queues/transfer", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ maxConcurrency: 2.5 }),
-    });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as Record<string, unknown>;
-    expect(typeof body["error"]).toBe("string");
-  });
+  // NOTE: validation error cases (maxConcurrency=0, float, negative) are covered
+  // in 07-error-handling.test.ts. Do not duplicate them here.
 
   it("PUT /api/queues/transfer with missing maxConcurrency returns 400", async () => {
     const res = await api("/api/queues/transfer", {

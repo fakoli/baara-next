@@ -39,7 +39,10 @@ describe("01-api-performance", () => {
   it("SLI api.health.latency: GET /api/health p99 < 100ms", async () => {
     const samples: number[] = [];
 
-    for (let i = 0; i < 10; i++) {
+    // 50 samples for a statistically meaningful p99.
+    // With fewer than ~100 samples p99 converges to the max; 50 is a reasonable
+    // balance between test duration and percentile fidelity.
+    for (let i = 0; i < 50; i++) {
       const { result: res, durationMs } = await measure(() =>
         api("/api/health")
       );
