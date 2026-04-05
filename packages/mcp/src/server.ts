@@ -24,6 +24,13 @@ export interface BaaraMcpServerDeps {
   orchestrator: IOrchestratorService;
   /** Path to the JSONL logs directory. When provided, get_execution_logs reads from JSONL files. */
   logsDir?: string;
+  /**
+   * When set, the `create_task` tool will default `targetThreadId` to this
+   * value instead of MAIN_THREAD_ID.  Populated by the chat route so that
+   * tasks created inside a chat conversation are automatically routed back to
+   * the thread they were created in.
+   */
+  currentThreadId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,7 +60,7 @@ export function createAllTools(deps: BaaraMcpServerDeps): McpTool[] {
   // generics — the handlers are callable with any args object at runtime.
   return [
     // tasks.ts — 6 tools
-    ...(createTaskTools(deps) as McpTool[]),
+    ...(createTaskTools({ store: deps.store, orchestrator: deps.orchestrator, currentThreadId: deps.currentThreadId }) as McpTool[]),
     // executions.ts — 9 tools (logsDir threaded for JSONL log reading)
     ...(createExecutionTools({ store: deps.store, orchestrator: deps.orchestrator, logsDir: deps.logsDir }) as McpTool[]),
     // queues.ts — 4 tools

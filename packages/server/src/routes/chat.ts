@@ -247,8 +247,10 @@ export function chatRoutes(deps: ChatDeps): Hono {
     // Resolve or generate a session ID
     const resolvedSessionId = sessionId ?? crypto.randomUUID();
 
-    // Compute the actual tool count so the handshake event is accurate (#6)
-    const allTools = createAllTools({ store: deps.store, orchestrator: deps.orchestrator });
+    // Compute the actual tool count so the handshake event is accurate (#6).
+    // Pass currentThreadId so that create_task defaults targetThreadId to the
+    // current chat thread instead of MAIN_THREAD_ID.
+    const allTools = createAllTools({ store: deps.store, orchestrator: deps.orchestrator, currentThreadId: threadId });
     const toolCount = allTools.length;
 
     // Persist the user message before streaming starts so it is always

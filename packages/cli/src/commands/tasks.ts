@@ -11,6 +11,7 @@ import { createStore } from "@baara-next/store";
 import { OrchestratorService, TaskManager } from "@baara-next/orchestrator";
 import { createDefaultRegistry } from "@baara-next/executor";
 import type { CreateTaskInput, UpdateTaskInput } from "@baara-next/core";
+import { MAIN_THREAD_ID } from "@baara-next/core";
 import {
   formatTable,
   formatJson,
@@ -118,6 +119,7 @@ export function registerTasksCommand(program: Command): void {
     .option("--timeout <ms>", "Timeout in milliseconds", "300000")
     .option("--max-retries <n>", "Maximum retry attempts", "0")
     .option("--project-id <id>", "Project ID")
+    .option("--target-thread <id>", "Thread UUID to route task output to (default: Main thread)")
     .option("--json", "Output as JSON")
     .option("--data-dir <dir>", "Data directory", join(homedir(), ".baara"))
     .action(
@@ -137,6 +139,7 @@ export function registerTasksCommand(program: Command): void {
         timeout: string;
         maxRetries: string;
         projectId?: string;
+        targetThread?: string;
         json?: boolean;
         dataDir: string;
       }) => {
@@ -173,6 +176,11 @@ export function registerTasksCommand(program: Command): void {
                 }
               : null;
 
+          // When --target-thread is not provided, default to MAIN_THREAD_ID so
+          // the task is explicitly routed to Main rather than leaving it null
+          // (null also routes to Main, but being explicit is clearer).
+          const targetThreadId = opts.targetThread ?? MAIN_THREAD_ID;
+
           const input: CreateTaskInput = {
             name: opts.name,
             prompt: opts.prompt,
@@ -185,6 +193,7 @@ export function registerTasksCommand(program: Command): void {
             timeoutMs: parseInt(opts.timeout, 10),
             maxRetries: parseInt(opts.maxRetries, 10),
             projectId: opts.projectId ?? null,
+            targetThreadId,
             agentConfig,
           };
           const task = taskManager.createTask(input);
