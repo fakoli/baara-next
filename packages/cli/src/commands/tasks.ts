@@ -259,8 +259,14 @@ export function registerTasksCommand(program: Command): void {
           if (opts.timeout !== undefined) update.timeoutMs = parseInt(opts.timeout, 10);
           if (opts.maxRetries !== undefined) update.maxRetries = parseInt(opts.maxRetries, 10);
 
+          const resolved = resolveTaskId(store, id);
+          if (!resolved) {
+            console.error(`Task not found: "${id}"`);
+            process.exitCode = 1;
+            return;
+          }
           const taskManager = new TaskManager(store);
-          const task = taskManager.updateTask(id, update);
+          const task = taskManager.updateTask(resolved.id, update);
           if (opts.json) {
             console.log(formatJson(task));
           } else {

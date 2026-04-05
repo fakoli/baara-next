@@ -40,6 +40,10 @@ export interface ServerInstance {
 /**
  * Bind to port 0 and read the assigned port, then close immediately.
  * Returns the available port number.
+ *
+ * Note: There is an inherent TOCTOU race between closing this socket and the
+ * target process binding to the port. startServer() retries with fresh ports
+ * if processes fail to bind.
  */
 function getAvailablePort(): Promise<number> {
   return new Promise((resolve, reject) => {

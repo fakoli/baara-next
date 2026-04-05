@@ -28,8 +28,10 @@ bun.lock
 # Agent status docs
 docs/plans/agent-welder-status.md
 
-# E2E test timing results
+# E2E test timing results and Playwright artifacts
 tests/e2e/results/
+tests/e2e/test-results/
 
-# Validation test timing results
+# Validation test timing results and Playwright artifacts
 tests/validation/results/
+tests/validation/test-results/

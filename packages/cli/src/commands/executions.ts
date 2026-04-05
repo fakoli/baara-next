@@ -30,7 +30,9 @@ function resolveDbPath(opts: { dataDir?: string }): string {
 function resolveExecutionId(store: IStore, input: string): Execution | null {
   const byId = store.getExecution(input);
   if (byId) return byId;
-  const byPrefix = store.listAllExecutions().find((e) => e.id.startsWith(input));
+  // Cap the scan to the 200 most recent executions to avoid loading the entire table.
+  // Users with more executions should use a longer prefix or full UUID.
+  const byPrefix = store.listAllExecutions({ limit: 200 }).find((e) => e.id.startsWith(input));
   return byPrefix ?? null;
 }
 
