@@ -140,11 +140,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               messages: s.messages.map((m) => {
                 if (m.id !== agentMsg.id) return m;
                 // Mark all previous tool calls as completed (the SDK doesn't
-                // emit tool_result events, so a new tool_use arriving means
-                // all prior calls finished).
-                const completedCalls = m.toolCalls.map((tc) =>
-                  tc.output === null ? { ...tc, output: '(completed)' } : tc
-                );
+                // Do NOT auto-complete previous calls here; prior calls are
+                // resolved when the agent begins its next turn (text_delta).
+                return {
+                  ...m,
+                  toolCalls: [
+                    ...m.toolCalls,
+                    { name: event.name, input: event.input, output: null },
+                  ],
+                };
                 return {
                   ...m,
                   toolCalls: [
