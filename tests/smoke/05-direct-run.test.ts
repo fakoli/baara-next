@@ -15,9 +15,9 @@ describe("05-direct-run", () => {
     await handle.cleanup();
   });
 
-  it("POST /api/tasks/:id/run returns a completed execution inline", async () => {
-    // Create task — use a generous timeoutMs so the Claude Code SDK has enough
-    // time to run the command and return a result before the task timeout fires.
+  it("submit + wait returns a completed execution with output", async () => {
+    // Use the queued path (submit) which correctly routes Bash-only tasks
+    // to ShellRuntime without requiring ANTHROPIC_API_KEY.
     const createRes = await api("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -25,9 +25,9 @@ describe("05-direct-run", () => {
         name: `smoke-direct-${Date.now()}`,
         prompt: "echo direct-run-output",
         sandboxType: "native",
-        executionType: "shell",
-        executionMode: "direct",
-        timeoutMs: 60000,
+        agentConfig: { allowedTools: ["Bash"] },
+        executionMode: "queued",
+        timeoutMs: 30000,
         maxRetries: 0,
       }),
     });
@@ -35,14 +35,23 @@ describe("05-direct-run", () => {
     const task = await createRes.json() as Record<string, unknown>;
     const taskId = task["id"] as string;
 
-    // Direct run — blocks until completion (may take up to 30 s for Claude Code SDK)
-    const runRes = await api(`/api/tasks/${taskId}/run`, { method: "POST" });
-    expect(runRes.status).toBe(200);
-    const execution = await runRes.json() as Record<string, unknown>;
+    // Submit to queue — agent picks it up and runs via ShellRuntime
+    const submitRes = await api(`/api/tasks/${taskId}/submit`, { method: "POST" });
+    expect(submitRes.status).toBe(201);
+    const submitted = await submitRes.json() as Record<string, unknown>;
+    const execId = submitted["id"] as string;
+
+    // Wait for completion
+    let execution: Record<string, unknown> = {};
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      const res = await api(`/api/executions/${execId}`);
+      execution = await res.json() as Record<string, unknown>;
+      if (execution["status"] === "completed") break;
+    }
 
     expect(execution["status"]).toBe("completed");
     expect(typeof execution["output"]).toBe("string");
     expect((execution["output"] as string).toLowerCase()).toContain("direct-run-output");
-    expect(execution["id"]).toBeTruthy();
-  }, 60_000);
+  }, 30_000);
 });

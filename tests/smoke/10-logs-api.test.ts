@@ -16,8 +16,8 @@ describe("10-logs-api", () => {
   });
 
   it("GET /api/executions/:id/logs returns correct shape after running a task", async () => {
-    // Create and directly run a task.  Use a generous timeoutMs so the Claude
-    // Code SDK has enough time to return a result before the task timeout fires.
+    // Create and submit a task via the queued path (routes Bash-only to ShellRuntime,
+    // no ANTHROPIC_API_KEY needed).
     const createRes = await api("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -25,9 +25,9 @@ describe("10-logs-api", () => {
         name: `smoke-logs-${Date.now()}`,
         prompt: "echo logs-test-output",
         sandboxType: "native",
-        executionType: "shell",
-        executionMode: "direct",
-        timeoutMs: 60000,
+        agentConfig: { allowedTools: ["Bash"] },
+        executionMode: "queued",
+        timeoutMs: 30000,
         maxRetries: 0,
       }),
     });
@@ -35,10 +35,19 @@ describe("10-logs-api", () => {
     const task = await createRes.json() as Record<string, unknown>;
     const taskId = task["id"] as string;
 
-    const runRes = await api(`/api/tasks/${taskId}/run`, { method: "POST" });
-    expect(runRes.status).toBe(200);
-    const execution = await runRes.json() as Record<string, unknown>;
-    const execId = execution["id"] as string;
+    const submitRes = await api(`/api/tasks/${taskId}/submit`, { method: "POST" });
+    expect(submitRes.status).toBe(201);
+    const submitted = await submitRes.json() as Record<string, unknown>;
+    const execId = submitted["id"] as string;
+
+    // Wait for completion
+    let execution: Record<string, unknown> = {};
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      const res = await api(`/api/executions/${execId}`);
+      execution = await res.json() as Record<string, unknown>;
+      if (execution["status"] === "completed") break;
+    }
     expect(execution["status"]).toBe("completed");
 
     // Fetch logs
