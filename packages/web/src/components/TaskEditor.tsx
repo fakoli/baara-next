@@ -58,7 +58,7 @@ export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: 
   const [timeoutMs, setTimeoutMs] = useState(task?.timeoutMs ?? 300_000);
   // Default to: explicit value on the task → current chat thread → Main thread.
   const [targetThreadId, setTargetThreadId] = useState<string>(
-    task.targetThreadId ?? MAIN_THREAD_ID
+    task?.targetThreadId ?? currentChatThreadId ?? MAIN_THREAD_ID
   );
 
   // agentConfig fields
