@@ -2,11 +2,14 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import type { IStore, IOrchestratorService } from "@baara-next/core";
+import { MAIN_THREAD_ID } from "@baara-next/core";
 import { ok, err, notFound, resolveTask } from "../helpers.ts";
 
 export function createTaskTools(deps: {
   store: IStore;
   orchestrator: IOrchestratorService;
+  /** When provided, `create_task` defaults targetThreadId to this value. */
+  currentThreadId?: string;
 }) {
   const { store } = deps;
 
@@ -105,6 +108,12 @@ export function createTaskTools(deps: {
             ? { type: resolvedSandboxType as "native" | "docker" }
             : undefined;
 
+        // If the caller did not specify a targetThreadId, default to the
+        // current chat thread (when called from within a chat conversation)
+        // or MAIN_THREAD_ID (when called via stdio/HTTP MCP with no context).
+        const resolvedTargetThread =
+          args.targetThreadId ?? deps.currentThreadId ?? MAIN_THREAD_ID;
+
         const task = store.createTask(id, {
           name: args.name,
           prompt: args.prompt,
@@ -117,7 +126,7 @@ export function createTaskTools(deps: {
           maxRetries: args.maxRetries,
           timeoutMs: args.timeoutMs,
           projectId: args.projectId ?? null,
-          targetThreadId: args.targetThreadId ?? null,
+          targetThreadId: resolvedTargetThread,
           agentConfig: args.allowedTools ? { allowedTools: args.allowedTools } : null,
         });
         return ok(task);

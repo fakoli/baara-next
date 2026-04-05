@@ -3,6 +3,7 @@ import type { Task, ExecutionType, ExecutionMode, Priority } from '../types.ts';
 import { updateTask, createTask } from '../lib/api.ts';
 import { useTaskStore } from '../stores/task-store.ts';
 import { useThreadStore } from '../stores/thread-store.ts';
+import { useChatStore } from '../stores/chat-store.ts';
 
 /** Mirror of MAIN_THREAD_ID from @baara-next/core — kept client-side to avoid a build dep. */
 const MAIN_THREAD_ID = '00000000-0000-0000-0000-000000000000';
@@ -43,6 +44,7 @@ const labelStyle: React.CSSProperties = {
 export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: TaskEditorProps) {
   const fetchTasks = useTaskStore((s) => s.fetchTasks);
   const { threads, fetchThreads } = useThreadStore();
+  const currentChatThreadId = useChatStore((s) => s.threadId);
 
   const isCreate = mode === 'create';
 
@@ -54,8 +56,10 @@ export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: 
   const [cronExpression, setCronExpression] = useState(task?.cronExpression ?? '');
   const [maxRetries, setMaxRetries] = useState(task?.maxRetries ?? 3);
   const [timeoutMs, setTimeoutMs] = useState(task?.timeoutMs ?? 300_000);
+  // Default to: explicit value on the task → current chat thread → Main thread.
+  // Tasks created from inside a chat thread are automatically linked to that thread.
   const [targetThreadId, setTargetThreadId] = useState<string>(
-    task?.targetThreadId ?? MAIN_THREAD_ID
+    task?.targetThreadId ?? currentChatThreadId ?? MAIN_THREAD_ID
   );
 
   // agentConfig fields
@@ -162,13 +166,23 @@ export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: 
     }
   }
 
-  // Build dropdown options: Main thread first, then all other threads.
-  const threadOptions = [
-    { id: MAIN_THREAD_ID, label: 'Main Thread (default)' },
-    ...threads
-      .filter((t) => t.id !== MAIN_THREAD_ID)
-      .map((t) => ({ id: t.id, label: t.title || 'Untitled thread' })),
-  ];
+  // Build dropdown options.
+  // Show "Current Thread" first when the user is inside a chat thread so they
+  // can easily route output back to their active conversation.  Main thread is
+  // always present.  All other threads follow in order.
+  const threadOptions: Array<{ id: string; label: string }> = [];
+
+  if (currentChatThreadId && currentChatThreadId !== MAIN_THREAD_ID) {
+    const currentThreadTitle =
+      threads.find((t) => t.id === currentChatThreadId)?.title || 'Current Thread';
+    threadOptions.push({ id: currentChatThreadId, label: `Current Thread — ${currentThreadTitle}` });
+  }
+
+  threadOptions.push({ id: MAIN_THREAD_ID, label: 'Main Thread (default)' });
+
+  threads
+    .filter((t) => t.id !== MAIN_THREAD_ID && t.id !== currentChatThreadId)
+    .forEach((t) => threadOptions.push({ id: t.id, label: t.title || 'Untitled thread' }));
 
   return (
     <div

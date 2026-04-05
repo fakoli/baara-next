@@ -604,7 +604,9 @@ export class OrchestratorService implements IOrchestratorService {
 
   /**
    * Called by DevTransport when the agent requests human input.
-   * Persists the InputRequest and transitions the execution to waiting_for_input.
+   * Persists the InputRequest, transitions the execution to waiting_for_input,
+   * and appends a HITL notification to the task's target thread so the user
+   * sees the approval request in their chat conversation.
    */
   async requestInput(
     executionId: string,
@@ -624,6 +626,39 @@ export class OrchestratorService implements IOrchestratorService {
 
     this.store.updateExecutionStatus(executionId, "waiting_for_input");
     emitInputRequested(this.store, executionId, req.id, prompt, options);
+
+    // -----------------------------------------------------------------------
+    // HITL thread notification — append an approval-request message to the
+    // task's target thread so the user sees it in their chat conversation.
+    // This is best-effort: errors are logged but never propagate.
+    // -----------------------------------------------------------------------
+    try {
+      const task = this.store.getTask(execution.taskId);
+      const notifyThreadId = task?.targetThreadId ?? MAIN_THREAD_ID;
+
+      // Only notify if the thread still exists.
+      const notifyThread = this.store.getThread(notifyThreadId)
+        ?? (notifyThreadId !== MAIN_THREAD_ID ? this.store.getThread(MAIN_THREAD_ID) : null);
+
+      if (notifyThread) {
+        const taskName = task?.name ?? execution.taskId;
+        const optionsHint = options && options.length > 0
+          ? `\n\nSuggested responses: ${options.join(" | ")}`
+          : "";
+        this.store.appendThreadMessage({
+          id: crypto.randomUUID(),
+          threadId: notifyThread.id,
+          role: "agent",
+          content: `Task "${taskName}" needs your input:\n\n${prompt}${optionsHint}\n\nRespond via the execution detail panel or use the provide_input tool.`,
+          toolCalls: "[]",
+        });
+      }
+    } catch (notifyErr) {
+      console.error(
+        `[orchestrator] HITL thread notification failed for execution ${executionId}:`,
+        notifyErr
+      );
+    }
   }
 
   /**
