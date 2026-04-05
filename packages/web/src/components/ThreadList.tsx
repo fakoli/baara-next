@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useThreadStore } from '../stores/thread-store.ts';
 import { useChatStore } from '../stores/chat-store.ts';
 import type { Thread } from '../types.ts';
-import { fetchThreadMessages } from '../lib/api.ts';
+import { fetchThreadMessages, createThread as apiCreateThread } from '../lib/api.ts';
 
 /** Mirror of MAIN_THREAD_ID from @baara-next/core — kept client-side to avoid a build dep. */
 const MAIN_THREAD_ID = '00000000-0000-0000-0000-000000000000';
@@ -88,9 +88,20 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
     return () => clearInterval(interval);
   }, [refreshMainUnread]);
 
-  function handleNewThread() {
-    setActiveThread(null);
-    clearChat();
+  async function handleNewThread() {
+    try {
+      const thread = await apiCreateThread('New Thread');
+      // Refresh the sidebar so the new thread appears immediately
+      await fetchThreads();
+      // Clear chat state and load the new empty thread
+      clearChat();
+      loadThread(thread);
+    } catch (err) {
+      console.error('Failed to create new thread:', err);
+      // Fallback: just clear the chat without a persisted thread
+      clearChat();
+      setActiveThread(null);
+    }
   }
 
   function handleSelectThread(t: Thread) {
@@ -153,7 +164,7 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
         <div style={{ display: 'flex', gap: 8 }}>
           {/* New Thread button */}
           <button
-            onClick={handleNewThread}
+            onClick={() => { void handleNewThread(); }}
             title="New Thread"
             style={{
               height: 22,

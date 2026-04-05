@@ -60,6 +60,7 @@ function execBadgeLabel(status: string): string {
 function TasksTab({ search }: { search: string }) {
   const { tasks, fetchTasks, runTask } = useTaskStore();
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [creatingTask, setCreatingTask] = useState(false);
 
   useEffect(() => {
     void fetchTasks();
@@ -71,23 +72,53 @@ function TasksTab({ search }: { search: string }) {
     (t) => !search || t.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (filtered.length === 0) {
-    return <EmptyMessage message={search ? 'No matching tasks.' : 'No tasks yet.'} />;
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* Header row: task count + New button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 6 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tasks.length} task{tasks.length !== 1 ? 's' : ''}</span>
+        <button
+          onClick={() => { setCreatingTask(true); setEditingTaskId(null); }}
+          style={{
+            fontSize: 11,
+            padding: '2px 8px',
+            background: 'var(--bg-raised)',
+            border: '1px solid var(--border)',
+            borderRadius: 5,
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-body)',
+          }}
+        >
+          + New
+        </button>
+      </div>
+
+      {/* Create form */}
+      {creatingTask && (
+        <TaskEditor
+          mode="create"
+          onClose={() => setCreatingTask(false)}
+          onCreated={() => setCreatingTask(false)}
+        />
+      )}
+
+      {/* Task list */}
+      {filtered.length === 0 && !creatingTask && (
+        <EmptyMessage message={search ? 'No matching tasks.' : 'No tasks yet.'} />
+      )}
       {filtered.map((task) => (
         <div key={task.id}>
           <TaskItem
             task={task}
             active={editingTaskId === task.id}
             onRun={() => void runTask(task.id)}
-            onEdit={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}
+            onEdit={() => { setEditingTaskId(editingTaskId === task.id ? null : task.id); setCreatingTask(false); }}
           />
           {editingTaskId === task.id && (
             <TaskEditor
               task={task}
+              mode="edit"
               onClose={() => setEditingTaskId(null)}
             />
           )}

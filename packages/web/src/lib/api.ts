@@ -152,6 +152,13 @@ export function fetchThreadMessages(threadId: string): Promise<ThreadMessage[]> 
   return request<ThreadMessage[]>(`/api/chat/sessions/${threadId}/messages`);
 }
 
+export function createThread(title: string = 'New Thread'): Promise<Thread> {
+  return request<Thread>('/api/chat/threads', {
+    method: 'POST',
+    body: JSON.stringify({ title }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Chat — SSE streaming via fetch + ReadableStream
 //
