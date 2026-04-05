@@ -1,0 +1,15 @@
+{
+  "name": "@baara-next/e2e-tests",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^25.5.2",
+    "typescript": "^5.8"
+  }
+}

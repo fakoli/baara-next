@@ -9,6 +9,12 @@
     "test": "turbo test",
     "test:smoke": "bun test --max-concurrency=1 tests/smoke/",
     "test:sli": "bun test --max-concurrency=1 tests/sli/",
+    "test:e2e": "cd tests/e2e && npx playwright test",
+    "test:e2e:ci": "cd tests/e2e && npx playwright test --grep-invert @local-only",
+    "test:e2e:report": "bun run tests/e2e/report-latency.ts",
+    "test:validation": "cd tests/validation && npx playwright test",
+    "test:validation:ci": "cd tests/validation && npx playwright test --grep-invert @local-only --project api",
+    "test:validation:report": "bun run tests/validation/report-validation.ts",
     "typecheck": "turbo typecheck",
     "clean": "turbo clean"
   },

@@ -27,3 +27,9 @@ bun.lock
 
 # Agent status docs
 docs/plans/agent-welder-status.md
+
+# E2E test timing results
+tests/e2e/results/
+
+# Validation test timing results
+tests/validation/results/

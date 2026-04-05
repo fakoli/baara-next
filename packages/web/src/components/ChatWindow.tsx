@@ -14,6 +14,7 @@ export default function ChatWindow() {
 
   return (
     <div
+      data-testid="chat-window"
       style={{
         flex: 1,
         display: 'flex',

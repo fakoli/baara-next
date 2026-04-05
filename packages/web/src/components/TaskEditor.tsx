@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Task, ExecutionType, ExecutionMode, Priority } from '../types.ts';
+import type { Task, SandboxType, ExecutionMode, Priority } from '../types.ts';
 import { updateTask, createTask } from '../lib/api.ts';
 import { useTaskStore } from '../stores/task-store.ts';
 import { useThreadStore } from '../stores/thread-store.ts';
@@ -50,7 +50,7 @@ export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: 
 
   const [name, setName] = useState(task?.name ?? '');
   const [prompt, setPrompt] = useState(task?.prompt ?? '');
-  const [executionType, setExecutionType] = useState<ExecutionType>(task?.executionType ?? 'cloud_code');
+  const [sandboxType, setSandboxType] = useState<SandboxType>(task?.sandboxType ?? 'native');
   const [executionMode, setExecutionMode] = useState<ExecutionMode>(task?.executionMode ?? 'queued');
   const [priority, setPriority] = useState<Priority>(task?.priority ?? 2);
   const [cronExpression, setCronExpression] = useState(task?.cronExpression ?? '');
@@ -137,7 +137,7 @@ export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: 
         await createTask({
           name: name.trim(),
           prompt: prompt.trim(),
-          executionType,
+          sandboxType,
           executionMode,
           priority,
           cronExpression: cronExpression.trim() || null,
@@ -153,7 +153,7 @@ export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: 
         await updateTask(task.id, {
           name: name.trim(),
           prompt: prompt.trim(),
-          executionType,
+          sandboxType,
           executionMode,
           priority,
           cronExpression: cronExpression.trim() || null,
@@ -267,19 +267,18 @@ export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: 
           />
         </div>
 
-        {/* Execution Type + Mode */}
+        {/* Sandbox Type + Mode */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <div>
-            <label style={labelStyle}>Execution Type</label>
+            <label style={labelStyle}>Sandbox Type</label>
             <select
-              value={executionType}
-              onChange={(e) => setExecutionType(e.target.value as ExecutionType)}
+              value={sandboxType}
+              onChange={(e) => setSandboxType(e.target.value as SandboxType)}
               style={fieldStyle}
             >
-              <option value="cloud_code">cloud_code</option>
-              <option value="shell">shell</option>
+              <option value="native">native</option>
               <option value="wasm">wasm</option>
-              <option value="wasm_edge">wasm_edge</option>
+              <option value="docker">docker</option>
             </select>
           </div>
           <div>

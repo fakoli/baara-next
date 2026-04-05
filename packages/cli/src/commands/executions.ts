@@ -5,7 +5,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { createStore } from "@baara-next/store";
 import { OrchestratorService } from "@baara-next/orchestrator";
-import type { ExecutionStatus } from "@baara-next/core";
+import type { ExecutionStatus, IStore, Execution } from "@baara-next/core";
 import {
   formatTable,
   formatJson,
@@ -21,6 +21,17 @@ const VALID_STATUSES = new Set<string>([
 function resolveDbPath(opts: { dataDir?: string }): string {
   const dataDir = opts.dataDir ?? join(homedir(), ".baara");
   return join(dataDir, "baara.db");
+}
+
+/**
+ * Resolve an execution by full UUID or 8-char prefix (in that order).
+ * Returns the Execution or null when nothing matches.
+ */
+function resolveExecutionId(store: IStore, input: string): Execution | null {
+  const byId = store.getExecution(input);
+  if (byId) return byId;
+  const byPrefix = store.listAllExecutions().find((e) => e.id.startsWith(input));
+  return byPrefix ?? null;
 }
 
 export function registerExecutionsCommand(program: Command): void {
@@ -96,7 +107,7 @@ export function registerExecutionsCommand(program: Command): void {
     .action((id: string, opts: { json?: boolean; dataDir: string }) => {
       const store = createStore(resolveDbPath(opts));
       try {
-        const exec = store.getExecution(id);
+        const exec = resolveExecutionId(store, id);
         if (!exec) {
           console.error(`Execution not found: "${id}"`);
           process.exitCode = 1;
@@ -134,9 +145,15 @@ export function registerExecutionsCommand(program: Command): void {
       ) => {
         const store = createStore(resolveDbPath(opts));
         try {
+          const resolved = resolveExecutionId(store, id);
+          if (!resolved) {
+            console.error(`Execution not found: "${id}"`);
+            process.exitCode = 1;
+            return;
+          }
           const limit = Math.min(parseInt(opts.limit, 10), 500);
           const afterSeq = opts.afterSeq ? parseInt(opts.afterSeq, 10) : undefined;
-          const events = store.listEvents(id, { limit, afterSeq });
+          const events = store.listEvents(resolved.id, { limit, afterSeq });
           if (opts.json) {
             console.log(formatJson(events));
             return;
@@ -167,9 +184,15 @@ export function registerExecutionsCommand(program: Command): void {
     .action(async (id: string, opts: { dataDir: string }) => {
       const store = createStore(resolveDbPath(opts));
       try {
+        const resolved = resolveExecutionId(store, id);
+        if (!resolved) {
+          console.error(`Execution not found: "${id}"`);
+          process.exitCode = 1;
+          return;
+        }
         const orchestrator = new OrchestratorService(store);
-        await orchestrator.cancelExecution(id);
-        console.log(`Cancelled execution: ${id}`);
+        await orchestrator.cancelExecution(resolved.id);
+        console.log(`Cancelled execution: ${resolved.id}`);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
         process.exitCode = 1;
@@ -189,8 +212,14 @@ export function registerExecutionsCommand(program: Command): void {
     .action(async (id: string, opts: { json?: boolean; dataDir: string }) => {
       const store = createStore(resolveDbPath(opts));
       try {
+        const resolved = resolveExecutionId(store, id);
+        if (!resolved) {
+          console.error(`Execution not found: "${id}"`);
+          process.exitCode = 1;
+          return;
+        }
         const orchestrator = new OrchestratorService(store);
-        const newExec = await orchestrator.retryExecution(id);
+        const newExec = await orchestrator.retryExecution(resolved.id);
         if (opts.json) {
           console.log(formatJson(newExec));
         } else {

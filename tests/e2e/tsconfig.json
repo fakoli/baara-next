@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": false,
+    "moduleResolution": "node",
+    "module": "commonjs",
+    "types": ["node", "@playwright/test"]
+  },
+  "include": ["./**/*.ts"]
+}
