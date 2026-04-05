@@ -110,8 +110,11 @@ export function registerStartCommand(program: Command): void {
       // ---------------------------------------------------------------------------
       const logsDir = join(dataDir, "logs");
       const apiKey = process.env["BAARA_API_KEY"];
+      const allowedOrigins = process.env["BAARA_ALLOWED_ORIGINS"]
+        ? process.env["BAARA_ALLOWED_ORIGINS"].split(",").map((o) => o.trim())
+        : undefined;
       const serverConfig = createServer(
-        { orchestrator, store, devTransport: transport, apiKey, dataDir, logsDir },
+        { orchestrator, store, devTransport: transport, apiKey, dataDir, logsDir, allowedOrigins },
         port,
         opts.hostname
       );

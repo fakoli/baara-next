@@ -10,7 +10,7 @@ import { homedir } from "os";
 import { createStore } from "@baara-next/store";
 import { OrchestratorService, TaskManager } from "@baara-next/orchestrator";
 import { createDefaultRegistry } from "@baara-next/executor";
-import type { CreateTaskInput, UpdateTaskInput } from "@baara-next/core";
+import type { CreateTaskInput, UpdateTaskInput, IStore, Task } from "@baara-next/core";
 import { MAIN_THREAD_ID } from "@baara-next/core";
 import {
   formatTable,
@@ -22,6 +22,19 @@ import {
 function resolveDbPath(opts: { dataDir?: string }): string {
   const dataDir = opts.dataDir ?? join(homedir(), ".baara");
   return join(dataDir, "baara.db");
+}
+
+/**
+ * Resolve a task by full UUID, name, or 8-char prefix (in that order).
+ * Returns the Task or null when nothing matches.
+ */
+function resolveTaskId(store: IStore, input: string): Task | null {
+  const byId = store.getTask(input);
+  if (byId) return byId;
+  const byName = store.getTaskByName(input);
+  if (byName) return byName;
+  const byPrefix = store.listTasks().find((t) => t.id.startsWith(input));
+  return byPrefix ?? null;
 }
 
 export function registerTasksCommand(program: Command): void {
@@ -81,8 +94,7 @@ export function registerTasksCommand(program: Command): void {
     .action((id: string, opts: { json?: boolean; dataDir: string }) => {
       const store = createStore(resolveDbPath(opts));
       try {
-        let task = store.getTask(id);
-        if (!task) task = store.getTaskByName(id);
+        const task = resolveTaskId(store, id);
         if (!task) {
           console.error(`Task not found: "${id}"`);
           process.exitCode = 1;
@@ -247,8 +259,14 @@ export function registerTasksCommand(program: Command): void {
           if (opts.timeout !== undefined) update.timeoutMs = parseInt(opts.timeout, 10);
           if (opts.maxRetries !== undefined) update.maxRetries = parseInt(opts.maxRetries, 10);
 
+          const resolved = resolveTaskId(store, id);
+          if (!resolved) {
+            console.error(`Task not found: "${id}"`);
+            process.exitCode = 1;
+            return;
+          }
           const taskManager = new TaskManager(store);
-          const task = taskManager.updateTask(id, update);
+          const task = taskManager.updateTask(resolved.id, update);
           if (opts.json) {
             console.log(formatJson(task));
           } else {
@@ -275,8 +293,14 @@ export function registerTasksCommand(program: Command): void {
     .action((id: string, opts: { dataDir: string }) => {
       const store = createStore(resolveDbPath(opts));
       try {
-        store.deleteTask(id);
-        console.log(`Deleted task: ${id}`);
+        const task = resolveTaskId(store, id);
+        if (!task) {
+          console.error(`Task not found: "${id}"`);
+          process.exitCode = 1;
+          return;
+        }
+        store.deleteTask(task.id);
+        console.log(`Deleted task: ${task.id}`);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
         process.exitCode = 1;
@@ -295,7 +319,13 @@ export function registerTasksCommand(program: Command): void {
     .action((id: string, opts: { dataDir: string }) => {
       const store = createStore(resolveDbPath(opts));
       try {
-        const task = store.updateTask(id, { enabled: true });
+        const resolved = resolveTaskId(store, id);
+        if (!resolved) {
+          console.error(`Task not found: "${id}"`);
+          process.exitCode = 1;
+          return;
+        }
+        const task = store.updateTask(resolved.id, { enabled: true });
         console.log(`Enabled task: ${task.name}`);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
@@ -312,7 +342,13 @@ export function registerTasksCommand(program: Command): void {
     .action((id: string, opts: { dataDir: string }) => {
       const store = createStore(resolveDbPath(opts));
       try {
-        const task = store.updateTask(id, { enabled: false });
+        const resolved = resolveTaskId(store, id);
+        if (!resolved) {
+          console.error(`Task not found: "${id}"`);
+          process.exitCode = 1;
+          return;
+        }
+        const task = store.updateTask(resolved.id, { enabled: false });
         console.log(`Disabled task: ${task.name}`);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
@@ -333,9 +369,15 @@ export function registerTasksCommand(program: Command): void {
     .action(async (id: string, opts: { json?: boolean; dataDir: string }) => {
       const store = createStore(resolveDbPath(opts));
       try {
+        const resolved = resolveTaskId(store, id);
+        if (!resolved) {
+          console.error(`Task not found: "${id}"`);
+          process.exitCode = 1;
+          return;
+        }
         const registry = await createDefaultRegistry({ dataDir: opts.dataDir });
         const orchestrator = new OrchestratorService(store, registry);
-        const execution = await orchestrator.runDirect(id);
+        const execution = await orchestrator.runDirect(resolved.id);
         if (opts.json) {
           console.log(formatJson(execution));
         } else {
@@ -360,8 +402,14 @@ export function registerTasksCommand(program: Command): void {
     .action(async (id: string, opts: { json?: boolean; dataDir: string }) => {
       const store = createStore(resolveDbPath(opts));
       try {
+        const resolved = resolveTaskId(store, id);
+        if (!resolved) {
+          console.error(`Task not found: "${id}"`);
+          process.exitCode = 1;
+          return;
+        }
         const orchestrator = new OrchestratorService(store);
-        const execution = await orchestrator.submitTask(id);
+        const execution = await orchestrator.submitTask(resolved.id);
         if (opts.json) {
           console.log(formatJson(execution));
         } else {

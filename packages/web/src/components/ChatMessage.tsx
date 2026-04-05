@@ -3,13 +3,14 @@ import ToolIndicator from './ToolIndicator.tsx';
 import InlineCard from './InlineCard.tsx';
 import { useChatStore } from '../stores/chat-store.ts';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ChatMessageProps {
   message: ChatMessageType;
 }
 
 export default function ChatMessage({ message }: ChatMessageProps) {
-  const { sendMessage, pendingPermission } = useChatStore();
+  const { sendMessage, pendingPermission, devMode } = useChatStore();
   const isUser = message.role === 'user';
 
   function handleCardAction(action: string, id: string) {
@@ -33,6 +34,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
   if (isUser) {
     return (
       <div
+        data-testid="msg-user"
         style={{
           display: 'flex',
           gap: 10,
@@ -80,6 +82,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
   // Agent message
   return (
     <div
+      data-testid="msg-agent"
       style={{
         display: 'flex',
         gap: 10,
@@ -109,38 +112,59 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 
       {/* Content column */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Tool call indicators */}
-        {(() => {
-          let permissionAssigned = false;
-          return message.toolCalls.map((tc, i) => {
-            let requestId: string | undefined;
-            if (!permissionAssigned && pendingPermission?.toolName === tc.name && tc.output === null && pendingPermission?.requestId) {
-              requestId = pendingPermission.requestId;
-              permissionAssigned = true;
-            }
-            return (
-              <ToolIndicator
-                key={`${tc.name}-${i}`}
-                name={tc.name}
-                detail={extractToolDetail(tc)}
-                completed={tc.output !== null || !message.streaming}
-                requestId={requestId}
-              />
-            );
-          });
-        })()}
+        {devMode ? (
+          <>
+            {/* Dev mode: Tool call indicators */}
+            {(() => {
+              let permissionAssigned = false;
+              return message.toolCalls.map((tc, i) => {
+                let requestId: string | undefined;
+                if (!permissionAssigned && pendingPermission?.toolName === tc.name && tc.output === null && pendingPermission?.requestId) {
+                  requestId = pendingPermission.requestId;
+                  permissionAssigned = true;
+                }
+                return (
+                  <ToolIndicator
+                    key={`${tc.name}-${i}`}
+                    name={tc.name}
+                    detail={extractToolDetail(tc)}
+                    completed={tc.output !== null || !message.streaming}
+                    requestId={requestId}
+                  />
+                );
+              });
+            })()}
 
-        {/* Inline cards for tool results */}
-        {message.toolCalls
-          .filter((tc) => tc.output !== null)
-          .map((tc, i) => (
-            <InlineCard
-              key={`${tc.name}-result-${i}`}
-              data={tc.output}
-              onAction={handleCardAction}
-              onHitlRespond={handleHitlRespond}
-            />
-          ))}
+            {/* Dev mode: Inline cards for tool results */}
+            {message.toolCalls
+              .filter((tc) => tc.output !== null)
+              .map((tc, i) => (
+                <InlineCard
+                  key={`${tc.name}-result-${i}`}
+                  data={tc.output}
+                  onAction={handleCardAction}
+                  onHitlRespond={handleHitlRespond}
+                />
+              ))}
+          </>
+        ) : (
+          /* User mode: show spinner while tools are running */
+          message.streaming && message.toolCalls.some((tc) => tc.output === null) ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 0',
+                color: 'var(--text-muted)',
+                fontSize: 12.5,
+              }}
+            >
+              <span className="tool-spinner" />
+              <span>Working...</span>
+            </div>
+          ) : null
+        )}
 
         {/* Text bubble */}
         {message.text && (
@@ -154,11 +178,11 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               color: 'var(--text-primary)',
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
-              marginTop: message.toolCalls.length > 0 ? 8 : 0,
+              marginTop: devMode && message.toolCalls.length > 0 ? 8 : 0,
             }}
             className={`chat-markdown ${message.streaming && !message.text.endsWith(' ') ? 'streaming-cursor' : ''}`}
           >
-            <Markdown>{message.text}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]}>{message.text}</Markdown>
           </div>
         )}
 

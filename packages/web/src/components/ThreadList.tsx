@@ -125,6 +125,7 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
 
   return (
     <aside
+      data-testid="thread-list"
       className="panel-collapsible"
       style={{
         width: collapsed ? 0 : 240,
@@ -191,6 +192,7 @@ export default function ThreadList({ collapsed, onCollapse }: ThreadListProps) {
           </button>
           {/* Collapse button */}
           <button
+            data-testid="thread-collapse"
             onClick={onCollapse}
             title="Collapse sidebar"
             style={{
@@ -431,6 +433,7 @@ function MainThreadRow({ thread, isActive, unreadCount, onSelect }: MainThreadRo
 export function ThreadListExpandButton({ onClick }: { onClick: () => void }) {
   return (
     <button
+      data-testid="thread-expand"
       onClick={onClick}
       title="Expand threads"
       style={{

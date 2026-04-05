@@ -40,7 +40,7 @@ function TaskDetail({ task, onClose }: TaskDetailProps) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <dt className="font-medium text-gray-500">Type</dt>
-            <dd className="text-gray-900 mt-0.5">{task.executionType}</dd>
+            <dd className="text-gray-900 mt-0.5">{task.sandboxType}</dd>
           </div>
           <div>
             <dt className="font-medium text-gray-500">Mode</dt>
@@ -189,7 +189,7 @@ export default function Tasks() {
                       <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{task.executionType}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{task.sandboxType}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{task.executionMode}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{PRIORITY_LABELS[task.priority] ?? task.priority}</td>
                   <td className="px-4 py-3 text-sm font-mono text-gray-500">

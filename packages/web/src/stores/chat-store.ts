@@ -34,6 +34,11 @@ interface ChatStore {
   /** Custom system instructions prepended to each request's system prompt */
   systemInstructions: string;
 
+  /** Whether to show tool call diagnostics (Dev mode). False = User mode (default). */
+  devMode: boolean;
+  /** Toggle devMode and persist the preference to localStorage. */
+  toggleDevMode: () => void;
+
   sendMessage: (text: string, abortSignal?: AbortSignal) => Promise<void>;
   loadThread: (thread: Thread) => void;
   clearChat: () => void;
@@ -75,9 +80,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   toolCallCount: 0,
   model: 'claude-sonnet-4-20250514',
   systemInstructions: '',
+  devMode: localStorage.getItem('baara-dev-mode') === 'true',
   permissionMode: 'auto',
   approvedTools: new Set<string>(),
   pendingPermission: null,
+
+  toggleDevMode: () => {
+    const next = !get().devMode;
+    set({ devMode: next });
+    try {
+      localStorage.setItem('baara-dev-mode', String(next));
+    } catch (err) {
+      console.warn('Dev mode preference could not be saved — localStorage unavailable', err);
+    }
+  },
 
   sendMessage: async (text, abortSignal) => {
     if (get().streaming) return;

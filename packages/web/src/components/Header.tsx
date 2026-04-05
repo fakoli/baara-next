@@ -108,6 +108,7 @@ export default function Header() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         {/* Live stats */}
         <div
+          data-testid="header-status"
           className="mono"
           style={{
             display: 'flex',

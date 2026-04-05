@@ -1,6 +1,7 @@
 // Mirror of @baara-next/core types for the web frontend
 
 export type Priority = 0 | 1 | 2 | 3;
+/** @deprecated Use SandboxType instead. Kept only for backward-compat with old data. */
 export type ExecutionType = 'cloud_code' | 'wasm' | 'wasm_edge' | 'shell';
 export type ExecutionMode = 'direct' | 'queued';
 export type ExecutionStatus =
@@ -42,7 +43,9 @@ export interface Task {
   prompt: string;
   cronExpression?: string;
   timeoutMs: number;
-  executionType: ExecutionType;
+  sandboxType: SandboxType;
+  /** @deprecated Kept for backward-compat with old API responses. Use sandboxType. */
+  executionType?: ExecutionType;
   agentConfig: AgentConfig | null;
   priority: Priority;
   targetQueue: string;
@@ -62,6 +65,8 @@ export interface CreateTaskInput {
   prompt: string;
   cronExpression?: string | null;
   timeoutMs?: number;
+  sandboxType?: SandboxType;
+  /** @deprecated Use sandboxType instead. */
   executionType?: ExecutionType;
   agentConfig?: AgentConfig | null;
   priority?: Priority;
@@ -79,6 +84,8 @@ export interface UpdateTaskInput {
   prompt?: string;
   cronExpression?: string | null;
   timeoutMs?: number;
+  sandboxType?: SandboxType;
+  /** @deprecated Use sandboxType instead. */
   executionType?: ExecutionType;
   agentConfig?: AgentConfig | null;
   priority?: Priority;
@@ -282,25 +289,16 @@ export type SandboxConfig =
       volumeMounts?: string[];
     };
 
-// Updated Task shape — sandboxType + sandboxConfig coexist with executionType
-// for backward compatibility.
-export interface TaskV2 extends Omit<Task, "executionType"> {
-  sandboxType: SandboxType;
-  sandboxConfig: SandboxConfig | null;
-  executionType?: ExecutionType; // kept for compat
-}
+// TaskV2 / CreateTaskInputV2 / UpdateTaskInputV2 are now aliases — sandboxType
+// was promoted into the base Task / CreateTaskInput / UpdateTaskInput interfaces.
+/** @deprecated Use Task directly — sandboxType is now on the base interface. */
+export type TaskV2 = Task & { sandboxConfig?: SandboxConfig | null };
 
-export interface CreateTaskInputV2 extends Omit<CreateTaskInput, "executionType"> {
-  sandboxType?: SandboxType;
-  sandboxConfig?: SandboxConfig | null;
-  executionType?: ExecutionType; // deprecated alias
-}
+/** @deprecated Use CreateTaskInput directly. */
+export type CreateTaskInputV2 = CreateTaskInput & { sandboxConfig?: SandboxConfig | null };
 
-export interface UpdateTaskInputV2 extends Omit<UpdateTaskInput, "executionType"> {
-  sandboxType?: SandboxType;
-  sandboxConfig?: SandboxConfig | null;
-  executionType?: ExecutionType; // deprecated alias
-}
+/** @deprecated Use UpdateTaskInput directly. */
+export type UpdateTaskInputV2 = UpdateTaskInput & { sandboxConfig?: SandboxConfig | null };
 
 // ---------------------------------------------------------------------------
 // Phase 5: Log streaming

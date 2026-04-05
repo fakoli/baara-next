@@ -61,7 +61,7 @@ function TaskCard({
       </div>
       <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', fontSize: 12, marginBottom: 10 }}>
         <dt className="mono" style={{ color: 'var(--text-muted)', fontSize: 11 }}>type</dt>
-        <dd style={{ color: 'var(--text-secondary)' }}>{task.executionType}</dd>
+        <dd style={{ color: 'var(--text-secondary)' }}>{task.sandboxType}</dd>
         <dt className="mono" style={{ color: 'var(--text-muted)', fontSize: 11 }}>mode</dt>
         <dd style={{ color: 'var(--text-secondary)' }}>{task.executionMode}</dd>
         {task.cronExpression && (
@@ -391,7 +391,7 @@ function isTask(data: unknown): data is Task {
   return (
     typeof data === 'object' &&
     data !== null &&
-    'executionType' in data &&
+    'sandboxType' in data &&
     'executionMode' in data &&
     'prompt' in data
   );

@@ -181,7 +181,7 @@ function TaskItem({
           {task.name}
         </div>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-          {task.executionMode} · {task.executionType}
+          {task.executionMode} · {task.sandboxType}
           {task.cronExpression ? ` · cron` : ''}
         </div>
       </div>
@@ -578,6 +578,7 @@ export default function ControlPanel({ collapsed, onCollapse }: ControlPanelProp
 
   return (
     <div
+      data-testid="control-panel"
       style={{
         width: collapsed ? 0 : 320,
         minWidth: collapsed ? 0 : 320,
@@ -603,6 +604,7 @@ export default function ControlPanel({ collapsed, onCollapse }: ControlPanelProp
       >
         {/* Collapse button */}
         <button
+          data-testid="cp-collapse"
           onClick={onCollapse}
           title="Collapse panel"
           style={{
@@ -692,6 +694,7 @@ export default function ControlPanel({ collapsed, onCollapse }: ControlPanelProp
 export function ControlPanelExpandButton({ onClick }: { onClick: () => void }) {
   return (
     <button
+      data-testid="cp-expand"
       onClick={onClick}
       title="Expand panel"
       style={{

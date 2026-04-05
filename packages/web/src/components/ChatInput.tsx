@@ -51,7 +51,7 @@ const PERMISSION_MODE_CONFIG: Record<
 };
 
 export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
-  const { streaming, sessionCostUsd, sendMessage, permissionMode, setPermissionMode, model, setModel, systemInstructions, setSystemInstructions } = useChatStore();
+  const { streaming, sessionCostUsd, sendMessage, permissionMode, setPermissionMode, model, setModel, systemInstructions, setSystemInstructions, devMode, toggleDevMode } = useChatStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [sysInstrOpen, setSysInstrOpen] = useState(false);
   const [draftInstructions, setDraftInstructions] = useState(systemInstructions);
@@ -170,6 +170,7 @@ export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
           }}
         />
         <button
+          data-testid="chat-send"
           onClick={handleSend}
           disabled={streaming}
           style={{
@@ -210,6 +211,7 @@ export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
         <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--text-muted)', alignItems: 'center' }}>
           {/* Permission mode toggle */}
           <button
+            data-testid="permission-mode"
             onClick={cyclePermissionMode}
             title={modeConfig.title}
             style={{
@@ -262,6 +264,7 @@ export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
           <span>·</span>
           {/* Model selector */}
           <select
+            data-testid="model-selector"
             value={model}
             onChange={(e) => setModel(e.target.value)}
             style={{
@@ -416,9 +419,49 @@ export default function ChatInput({ toolCount = 27 }: ChatInputProps) {
             )}
           </div>
         </div>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          ${sessionCostUsd.toFixed(2)} this session
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Dev mode toggle */}
+          <button
+            data-testid="dev-mode-toggle"
+            onClick={toggleDevMode}
+            title={devMode ? 'Dev mode: tool diagnostics visible' : 'User mode: tool diagnostics hidden'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              background: 'var(--bg-active)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              padding: '2px 8px',
+              cursor: 'pointer',
+              fontSize: 11,
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-body)',
+              transition: 'border-color 0.12s',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                background: devMode ? '#22c55e' : '#55556a',
+                borderRadius: '50%',
+                display: 'inline-block',
+                flexShrink: 0,
+              }}
+            />
+            <span>{devMode ? 'Dev' : 'User'}</span>
+          </button>
+          <span data-testid="session-cost" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            ${sessionCostUsd.toFixed(2)} this session
+          </span>
+        </div>
       </div>
     </div>
   );

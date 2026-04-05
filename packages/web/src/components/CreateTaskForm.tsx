@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CreateTaskInput, ExecutionType, ExecutionMode, Priority } from '../types.ts';
+import type { CreateTaskInput, SandboxType, ExecutionMode, Priority } from '../types.ts';
 import { useTaskStore } from '../stores/task-store.ts';
 
 interface CreateTaskFormProps {
@@ -15,7 +15,7 @@ export default function CreateTaskForm({ onSuccess, onCancel }: CreateTaskFormPr
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [executionType, setExecutionType] = useState<ExecutionType>('cloud_code');
+  const [sandboxType, setSandboxType] = useState<SandboxType>('native');
   const [executionMode, setExecutionMode] = useState<ExecutionMode>('queued');
   const [priority, setPriority] = useState<Priority>(2);
   const [cronExpression, setCronExpression] = useState('');
@@ -31,7 +31,7 @@ export default function CreateTaskForm({ onSuccess, onCancel }: CreateTaskFormPr
         name: name.trim(),
         description: description.trim() || undefined,
         prompt: prompt.trim(),
-        executionType,
+        sandboxType,
         executionMode,
         priority,
         cronExpression: cronExpression.trim() || null,
@@ -97,16 +97,15 @@ export default function CreateTaskForm({ onSuccess, onCancel }: CreateTaskFormPr
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Execution Type</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Sandbox Type</label>
           <select
-            value={executionType}
-            onChange={(e) => setExecutionType(e.target.value as ExecutionType)}
+            value={sandboxType}
+            onChange={(e) => setSandboxType(e.target.value as SandboxType)}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="cloud_code">cloud_code</option>
-            <option value="shell">shell</option>
+            <option value="native">native</option>
             <option value="wasm">wasm</option>
-            <option value="wasm_edge">wasm_edge</option>
+            <option value="docker">docker</option>
           </select>
         </div>
 
