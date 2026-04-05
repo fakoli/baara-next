@@ -108,18 +108,28 @@ export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: 
         }
       }
 
-      const agentConfig = {
+      const agentConfig: Record<string, unknown> = {
         ...(task?.agentConfig ?? {}),
-        // Setting to undefined explicitly removes the key so a previously-set
-        // value is cleared when the user empties the field.
-        model: model.trim() || undefined,
-        ...(allowedTools.trim()
-          ? { allowedTools: allowedTools.split(',').map((s) => s.trim()).filter(Boolean) }
-          : {}),
-        ...(budgetUsd.trim() ? { budgetUsd: Number(budgetUsd) } : {}),
-        systemPrompt: systemPrompt.trim() || undefined,
       };
 
+      // Only set keys that have real values — omit blank fields entirely
+      // so the null-guard below works correctly.
+      if (model.trim()) agentConfig.model = model.trim();
+      else delete agentConfig.model;
+
+      if (allowedTools.trim()) {
+        agentConfig.allowedTools = allowedTools.split(',').map((s) => s.trim()).filter(Boolean);
+      } else {
+        delete agentConfig.allowedTools;
+      }
+
+      if (budgetUsd.trim()) agentConfig.budgetUsd = Number(budgetUsd);
+      else delete agentConfig.budgetUsd;
+
+      if (systemPrompt.trim()) agentConfig.systemPrompt = systemPrompt.trim();
+      else delete agentConfig.systemPrompt;
+
+      // If no meaningful keys remain, store null (not empty {})
       const resolvedAgentConfig = Object.keys(agentConfig).length > 0 ? agentConfig : null;
       const resolvedTargetThreadId = targetThreadId === MAIN_THREAD_ID ? null : targetThreadId;
 
