@@ -125,8 +125,11 @@ export default function Header() {
 
         {/* Avatar + dropdown */}
         <div ref={menuRef} style={{ position: 'relative' }}>
-          <div
+          <button
             onClick={() => setMenuOpen((o) => !o)}
+            aria-label="Account menu"
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
             style={{
               width: 26,
               height: 26,
@@ -141,11 +144,13 @@ export default function Header() {
               cursor: 'pointer',
               border: '1px solid var(--border)',
               userSelect: 'none',
+              padding: 0,
+              fontFamily: 'var(--font-body)',
             }}
             title="Account"
           >
             SD
-          </div>
+          </button>
 
           {menuOpen && (
             <div
