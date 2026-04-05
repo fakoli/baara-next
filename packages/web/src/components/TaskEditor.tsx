@@ -57,9 +57,8 @@ export default function TaskEditor({ task, mode = 'edit', onClose, onCreated }: 
   const [maxRetries, setMaxRetries] = useState(task?.maxRetries ?? 3);
   const [timeoutMs, setTimeoutMs] = useState(task?.timeoutMs ?? 300_000);
   // Default to: explicit value on the task → current chat thread → Main thread.
-  // Tasks created from inside a chat thread are automatically linked to that thread.
   const [targetThreadId, setTargetThreadId] = useState<string>(
-    task?.targetThreadId ?? currentChatThreadId ?? MAIN_THREAD_ID
+    task.targetThreadId ?? MAIN_THREAD_ID
   );
 
   // agentConfig fields
