@@ -1,9 +1,9 @@
 // @baara-next/transport — createTransport factory
 
 import { DevTransport, type DevTransportOrchestratorRefs } from "./dev-transport.ts";
-import { HttpTransport } from "./http-transport.ts";
+import { HttpTransport, type HttpTransportConfig } from "./http-transport.ts";
 
-export type TransportMode = "dev" | "production";
+export type TransportMode = "dev" | "http";
 
 /**
  * Options for dev mode: the orchestrator's method references are required.
@@ -14,12 +14,12 @@ export interface DevTransportOptions {
 }
 
 /**
- * Options for production mode: a base URL pointing to the orchestrator HTTP
- * server is required.
+ * Options for http mode: a base URL pointing to the orchestrator HTTP server
+ * is required.  An apiKey is required whenever the orchestrator was started
+ * with `BAARA_API_KEY` set (which `start --mode http` enforces).
  */
-export interface HttpTransportOptions {
-  mode: "production";
-  baseUrl: string;
+export interface HttpTransportOptions extends HttpTransportConfig {
+  mode: "http";
 }
 
 export type CreateTransportOptions = DevTransportOptions | HttpTransportOptions;
@@ -36,11 +36,12 @@ export type CreateTransportOptions = DevTransportOptions | HttpTransportOptions;
  * });
  * ```
  *
- * @example Production mode (separate processes):
+ * @example Http mode (separate processes):
  * ```ts
  * const transport = createTransport({
- *   mode: "production",
+ *   mode: "http",
  *   baseUrl: "http://orchestrator:3000",
+ *   apiKey: process.env.BAARA_API_KEY,
  * });
  * ```
  */
@@ -50,5 +51,11 @@ export function createTransport(opts: CreateTransportOptions): DevTransport | Ht
   if (opts.mode === "dev") {
     return new DevTransport(opts.orchestrator);
   }
-  return new HttpTransport(opts.baseUrl);
+  return new HttpTransport({
+    baseUrl: opts.baseUrl,
+    apiKey: opts.apiKey,
+    maxRetries: opts.maxRetries,
+    baseDelayMs: opts.baseDelayMs,
+    maxDelayMs: opts.maxDelayMs,
+  });
 }
