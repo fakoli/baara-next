@@ -1,0 +1,14 @@
+# fakoli-state local-only artifacts.
+# Source of truth lives in prd.md, packets/, and config.yaml (which are tracked).
+
+# SQLite canonical state — binary, grows on every event.
+state.db
+state.db-journal
+state.db-wal
+state.db-shm
+
+# Append-only event log — grows without bound; reconstructible from state.db + git history.
+events.jsonl
+
+# Per-task evidence buffer — local-only cache, populated during a claim.
+.evidence-buffer/
