@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": ["bun-types"],
+    "paths": {
+      "@baara-next/core": ["../../packages/core/src/index.ts"],
+      "@baara-next/store": ["../../packages/store/src/index.ts"],
+      "@baara-next/orchestrator": ["../../packages/orchestrator/src/index.ts"],
+      "@baara-next/agent": ["../../packages/agent/src/index.ts"],
+      "@baara-next/executor": ["../../packages/executor/src/index.ts"],
+      "@baara-next/transport": ["../../packages/transport/src/index.ts"],
+      "@baara-next/server": ["../../packages/server/src/index.ts"],
+      "@baara-next/cli": ["../../packages/cli/src/index.ts"],
+      "@baara-next/mcp": ["../../packages/mcp/src/index.ts"]
+    }
+  },
+  "include": ["./**/*.ts"]
+}
