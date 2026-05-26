@@ -9,6 +9,7 @@
     "test": "turbo test",
     "test:smoke": "bun test --max-concurrency=1 tests/smoke/",
     "test:sli": "bun test --max-concurrency=1 tests/sli/",
+    "test:chaos": "bun test --max-concurrency=1 --timeout=120000 tests/chaos/",
     "test:e2e": "cd tests/e2e && npx playwright test",
     "test:e2e:ci": "cd tests/e2e && npx playwright test --grep-invert @local-only",
     "test:e2e:report": "bun run tests/e2e/report-latency.ts",
